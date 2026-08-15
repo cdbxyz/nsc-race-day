@@ -159,3 +159,36 @@ test("localWrite refuses a row without a client-generated id", async () => {
 test("localWrite refuses an unknown table", async () => {
   await assert.rejects(() => db.localWrite("nonsense", { id: db.newId() }), /unknown table/);
 });
+
+/* ---------------------------------------------------------------------------
+ * Deleting rows that are records of intent rather than records of fact.
+ * ------------------------------------------------------------------------ */
+
+test("localDelete removes the row and queues the removal together", async () => {
+  const entry = { id: db.newId(), race_id: "r1", boat_id: "b1", helm_id: "h1",
+                  base_py: 1122, handicap_factor: 1, personal_py: 1122, fleet: "fast" };
+  await db.localWrite("entries", entry);
+  await db.clearOutbox((await db.peekOutbox(10)).map((e) => e.seq));
+
+  await db.localDelete("entries", entry.id);
+
+  assert.equal(await db.get("entries", entry.id), undefined, "gone locally");
+  const [queued] = await db.peekOutbox(10);
+  assert.equal(queued.op, "delete");
+  assert.equal(queued.table, "entries");
+  assert.equal(queued.id, entry.id);
+});
+
+test("race events cannot be deleted", async () => {
+  // The append-only rule is a safety property, not a style preference: a race
+  // record is evidence. Mistakes are corrected by appending an undo.
+  const event = raceEvent();
+  await db.localWrite("race_events", event);
+
+  await assert.rejects(() => db.localDelete("race_events", event.id), /append-only/);
+  assert.deepEqual(await db.get("race_events", event.id), event, "still there");
+});
+
+test("localDelete refuses an unknown table", async () => {
+  await assert.rejects(() => db.localDelete("nonsense", "x"), /unknown table/);
+});

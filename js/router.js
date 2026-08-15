@@ -5,6 +5,19 @@
  * plain objects: { title, mount(el), unmount() }.
  */
 
+/* The active router, so page modules can navigate without app.js having to
+   thread a callback through every one of them. */
+let active = null;
+
+/** Go to a page by name. No-op before the router has started. */
+export function navigate(name) {
+  active?.navigate(name);
+}
+
+export function currentPage() {
+  return active?.current ?? null;
+}
+
 export function createRouter(routes, { fallback = "setup", onChange = null } = {}) {
   let currentName = null;
 
@@ -59,5 +72,7 @@ export function createRouter(routes, { fallback = "setup", onChange = null } = {
     show(nameFromHash());
   }
 
-  return { start, navigate, get current() { return currentName; } };
+  const router = { start, navigate, get current() { return currentName; } };
+  active = router;
+  return router;
 }

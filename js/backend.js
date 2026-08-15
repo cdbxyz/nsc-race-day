@@ -23,8 +23,16 @@ const TABLE_ORDER = [
   "race_events",
 ];
 
+// A table not in the list sorts last rather than first: indexOf gives -1 for
+// anything unlisted, which would otherwise send a future table ahead of the
+// parents it depends on.
+function rank(table) {
+  const i = TABLE_ORDER.indexOf(table);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
 /** Dependencies are injected so the ordering rules can be tested directly. */
-export function createSupabaseBackend({ upsert, isSignedIn }) {
+export function createSupabaseBackend({ upsert, remove, isSignedIn }) {
   return {
     name: "supabase",
 
@@ -35,6 +43,18 @@ export function createSupabaseBackend({ upsert, isSignedIn }) {
         throw new Error("not signed in");
       }
 
+      // Deletes are rare (a boat signed on by mistake) and reorder badly
+      // against upserts — delete-then-recreate and create-then-delete mean
+      // opposite things. When one is present, give up the batching and replay
+      // the batch exactly as it was tapped.
+      if (batch.some((entry) => entry.op === "delete")) {
+        for (const entry of batch) {
+          if (entry.op === "delete") await remove(entry.table, entry.id);
+          else await upsert(entry.table, [entry.row]);
+        }
+        return;
+      }
+
       const byTable = new Map();
       for (const entry of batch) {
         if (!byTable.has(entry.table)) byTable.set(entry.table, new Map());
@@ -43,13 +63,6 @@ export function createSupabaseBackend({ upsert, isSignedIn }) {
         byTable.get(entry.table).set(entry.id, entry.row);
       }
 
-      // A table not in the list sorts last rather than first: indexOf gives -1
-      // for anything unlisted, which would otherwise send a future table ahead
-      // of the parents it depends on.
-      const rank = (table) => {
-        const i = TABLE_ORDER.indexOf(table);
-        return i === -1 ? Number.MAX_SAFE_INTEGER : i;
-      };
       const tables = [...byTable.keys()].sort((a, b) => rank(a) - rank(b));
 
       for (const table of tables) {
@@ -61,6 +74,7 @@ export function createSupabaseBackend({ upsert, isSignedIn }) {
 
 export const supabaseBackend = createSupabaseBackend({
   upsert: api.upsert,
+  remove: api.remove,
   isSignedIn: api.isSignedIn,
 });
 
@@ -110,8 +124,11 @@ export async function lastRefreshedAt() {
   return (await db.getMeta(LAST_REFRESHED_KEY)) ?? null;
 }
 
-/** Cached season wins, as a Map of `${helm_id}:${season}` -> wins. */
+/**
+ * Cached season wins, as the rows the helm_season_wins view returns:
+ * `[{ helm_id, season, wins }]`. Kept in that shape because that is what
+ * handicap.js's winsForHelm() takes.
+ */
 export async function cachedSeasonWins() {
-  const rows = (await db.getMeta("helm_season_wins")) ?? [];
-  return new Map(rows.map((r) => [`${r.helm_id}:${r.season}`, r.wins]));
+  return (await db.getMeta("helm_season_wins")) ?? [];
 }

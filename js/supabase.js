@@ -234,6 +234,13 @@ export async function upsert(table, rows) {
   });
 }
 
+/** Delete a row by primary key. */
+export async function remove(table, id) {
+  await request("DELETE", `/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
 /** Read a table or view. */
 export async function select(table, { columns = "*", params = {}, authed = true } = {}) {
   const search = new URLSearchParams({ select: columns, ...params });

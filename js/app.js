@@ -15,6 +15,7 @@ import { findResumePoint, renderResumeBanner } from "./resume.js";
 import { startUpdateWatch, createUpdatePrompt, canPromptNow } from "./update.js";
 
 import setup from "./pages/setup.js";
+import registers from "./pages/registers.js";
 import signon from "./pages/signon.js";
 import checklist from "./pages/checklist.js";
 import sequence from "./pages/sequence.js";
@@ -23,7 +24,7 @@ import results from "./pages/results.js";
 import standdown from "./pages/standdown.js";
 import dev from "./pages/dev.js";
 
-const PAGES = { setup, signon, checklist, sequence, live, results, standdown, dev };
+const PAGES = { setup, registers, signon, checklist, sequence, live, results, standdown, dev };
 
 let router;
 let updatePrompt;

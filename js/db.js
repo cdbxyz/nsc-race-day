@@ -181,6 +181,40 @@ export async function localWrite(table, row) {
 }
 
 /**
+ * Remove a row and queue the removal, in one transaction.
+ *
+ * Only for rows that are records of intent rather than records of fact:
+ * a boat signed on by mistake, a class typed wrong. Race events are
+ * append-only and must never come through here — a mis-tapped lap is undone by
+ * appending an `event_undone`, never by deleting the original.
+ */
+export async function localDelete(table, id) {
+  if (!TABLES.includes(table)) throw new Error(`unknown table: ${table}`);
+  if (table === "race_events") {
+    throw new Error("race_events is append-only — append an event_undone instead");
+  }
+  if (!id) throw new Error(`localDelete needs an id`);
+
+  const db = await openDB();
+  const tx = db.transaction([table, "outbox"], "readwrite");
+  const done = txDone(tx);
+
+  tx.objectStore(table).delete(id);
+  tx.objectStore("outbox").add({
+    id,
+    table,
+    op: "delete",
+    row: null,
+    created_at: Date.now(),
+    attempts: 0,
+    last_error: null,
+  });
+
+  await done;
+  notifyWrite();
+}
+
+/**
  * Write rows without queueing them for sync. For reference data pulled DOWN
  * from Supabase (boat register, helms, season wins) — pushing it back up would
  * be a pointless round trip.

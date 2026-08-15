@@ -44,26 +44,19 @@
   <!-- 0 -->
   <section class="page" id="page-setup" hidden aria-label="Race day setup">
     <h2>Race day setup</h2>
-    <div class="panel">
-      <div class="panel-head"><span class="panel-title">Step 0</span></div>
-      <div class="stub">
-        Date, OOD / RO1 / RO2, series and planned race count land here in
-        Phase&nbsp;3. Writes go through <code>localWrite()</code> so they sync
-        like everything else.
-      </div>
-    </div>
+    <div id="setup-body"></div>
+  </section>
+
+  <!-- registers: reachable from setup, not part of the six steps -->
+  <section class="page" id="page-registers" hidden aria-label="Registers">
+    <h2>Registers</h2>
+    <div id="registers-body"></div>
   </section>
 
   <!-- 1 -->
   <section class="page" id="page-signon" hidden aria-label="Sign-on">
     <h2>Sign-on</h2>
-    <div class="panel">
-      <div class="panel-head"><span class="panel-title">Step 1</span></div>
-      <div class="stub">
-        Search the boat register, add boat + helm, snapshot base PY and the
-        helm's handicap factor onto each entry. Phase&nbsp;3.
-      </div>
-    </div>
+    <div id="signon-body"></div>
   </section>
 
   <!-- 2 -->
@@ -266,6 +259,7 @@
 
   <nav class="foot" aria-label="Pages">
     <a href="#/setup">Setup</a>
+    <a href="#/registers">Registers</a>
     <a href="#/signon">Sign-on</a>
     <a href="#/checklist">Checklist</a>
     <a href="#/sequence">Sequence</a>

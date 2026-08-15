@@ -87,3 +87,52 @@ test("an unknown table still gets pushed, after the known ones", async () => {
 
   assert.deepEqual(calls.map((c) => c.table), ["race_days", "future_table"]);
 });
+
+/* ---------------------------------------------------------------------------
+ * Deletes.
+ *
+ * A boat signed on by mistake has to come off again. Deletes reorder badly
+ * against upserts — create-then-delete and delete-then-create mean opposite
+ * things — so a batch containing one is replayed exactly as it was tapped.
+ * ------------------------------------------------------------------------ */
+
+function recorderWithDelete({ signedIn = true } = {}) {
+  const calls = [];
+  const backend = createSupabaseBackend({
+    isSignedIn: () => signedIn,
+    upsert: async (table, rows) => calls.push({ op: "upsert", table, ids: rows.map((r) => r.id) }),
+    remove: async (table, id) => calls.push({ op: "delete", table, id }),
+  });
+  return { backend, calls };
+}
+
+const del = (table, id) => ({ table, id, op: "delete", row: null });
+
+test("a delete reaches the server", async () => {
+  const { backend, calls } = recorderWithDelete();
+  await backend.push([del("entries", "en1")]);
+  assert.deepEqual(calls, [{ op: "delete", table: "entries", id: "en1" }]);
+});
+
+test("create-then-delete in one batch stays in that order", async () => {
+  const { backend, calls } = recorderWithDelete();
+  await backend.push([entry("entries", "en1"), del("entries", "en1")]);
+
+  assert.deepEqual(calls.map((c) => c.op), ["upsert", "delete"],
+    "reordering these would leave the row behind on the server");
+});
+
+test("delete-then-create in one batch also stays in that order", async () => {
+  const { backend, calls } = recorderWithDelete();
+  await backend.push([del("entries", "en1"), entry("entries", "en1")]);
+
+  assert.deepEqual(calls.map((c) => c.op), ["delete", "upsert"],
+    "reordering these would destroy the row the OOD just re-added");
+});
+
+test("batches without deletes keep the grouped, dependency-ordered path", async () => {
+  const { backend, calls } = recorderWithDelete();
+  await backend.push([entry("race_events", "e1"), entry("race_days", "d1")]);
+
+  assert.deepEqual(calls.map((c) => c.table), ["race_days", "race_events"]);
+});
