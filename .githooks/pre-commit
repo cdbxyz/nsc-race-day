@@ -1,0 +1,13 @@
+#!/bin/sh
+# Keeps sw.js's shell list and cache version in step with the files being
+# committed, so nobody has to remember to bump anything.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+set -e
+
+node tools/stamp-sw.mjs
+
+if ! git diff --quiet -- sw.js; then
+  git add sw.js
+  echo "pre-commit: sw.js re-stamped and staged"
+fi

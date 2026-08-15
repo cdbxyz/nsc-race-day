@@ -17,16 +17,24 @@
 </head>
 <body>
 
-<header class="mast">
-  <div class="brand">
-    <div class="eyebrow">Netley Sailing Club</div>
-    <h1>Race <span class="thin">Day</span></h1>
+<div class="topbar">
+  <header class="mast">
+    <div class="brand">
+      <div class="eyebrow">Netley Sailing Club</div>
+      <h1>Race <span class="thin">Day</span></h1>
+    </div>
+    <div class="sync-pill" id="sync-pill" data-state="synced" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="sync-label">All synced</span>
+    </div>
+  </header>
+
+  <div class="updatebar" id="update-bar" hidden role="status">
+    <span class="updatebar-text">Update available</span>
+    <button class="updatebar-action" type="button" id="update-refresh">Tap to refresh</button>
+    <button class="updatebar-dismiss" type="button" id="update-dismiss" aria-label="Dismiss update">&times;</button>
   </div>
-  <div class="sync-pill" id="sync-pill" data-state="synced" role="status" aria-live="polite">
-    <span class="dot" aria-hidden="true"></span>
-    <span id="sync-label">All synced</span>
-  </div>
-</header>
+</div>
 
 <div class="wrap">
 

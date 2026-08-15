@@ -9,6 +9,7 @@ import * as db from "./db.js";
 import { sync } from "./sync.js";
 import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
+import { startUpdateWatch, updateBanner } from "./update.js";
 
 import setup from "./pages/setup.js";
 import signon from "./pages/signon.js";
@@ -39,7 +40,8 @@ async function boot() {
   router.start();
 
   await showResumeBanner();
-  registerServiceWorker();
+
+  startUpdateWatch({ onAvailable: updateBanner(document.getElementById("update-bar")) });
 }
 
 function wireSyncIndicator() {
@@ -64,15 +66,6 @@ async function showResumeBanner() {
   const slot = document.getElementById("resume-slot");
   const point = await findResumePoint();
   renderResumeBanner(slot, point, (route) => router.navigate(route));
-}
-
-function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-  // Relative path so the worker's scope is this directory, which is what makes
-  // the app work as a GitHub Pages project site.
-  navigator.serviceWorker
-    .register("sw.js")
-    .catch((err) => console.error("service worker registration failed", err));
 }
 
 boot().catch((err) => {

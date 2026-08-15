@@ -38,9 +38,9 @@ body{
 }
 .wrap{max-width:520px;margin:0 auto;padding:0 14px 40px}
 
-/* ---- mast: fixed so the sync indicator is never scrolled away ---- */
+/* ---- mast: pinned so the sync indicator is never scrolled away ---- */
+.topbar{position:sticky;top:0;z-index:20}
 .mast{
-  position:sticky;top:0;z-index:20;
   background:var(--ink);color:#fff;
   padding:calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));
   display:flex;align-items:center;gap:12px;
@@ -67,6 +67,36 @@ h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spaci
 .sync-pill[data-state="offline"] .dot{background:var(--slate)}
 .sync-pill[data-state="error"]{border-color:var(--flag)}
 .sync-pill[data-state="error"] .dot{background:var(--flag)}
+
+/* ---- update prompt: quiet enough to ignore mid-race, obvious enough to spot.
+   Tapping it reloads, which is safe — every screen rebuilds from the event
+   log — but it is never applied without the OOD asking for it. ---- */
+.updatebar{
+  display:flex;align-items:center;gap:10px;
+  background:var(--hull);color:#fff;
+  padding:0 calc(8px + var(--safe-r)) 0 calc(14px + var(--safe-l));
+  border-top:1px solid rgba(255,255,255,.14);
+}
+.updatebar[hidden]{display:none}
+.updatebar-text{
+  flex:1;min-width:0;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.11em;
+  font-size:.76rem;font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+}
+.updatebar-action{
+  flex:none;min-height:44px;padding:0 12px;cursor:pointer;
+  background:transparent;border:1px solid rgba(255,255,255,.5);border-radius:2px;
+  color:#fff;font-family:var(--disp);text-transform:uppercase;
+  letter-spacing:.11em;font-size:.76rem;font-weight:600;
+}
+.updatebar-action:active{background:rgba(255,255,255,.16)}
+.updatebar-action[disabled]{opacity:.6;cursor:default}
+.updatebar-dismiss{
+  flex:none;width:44px;min-height:44px;cursor:pointer;
+  background:transparent;border:none;color:#B9CCEA;font-size:1.4rem;line-height:1;
+}
+.updatebar-action:focus-visible,.updatebar-dismiss:focus-visible{outline:2px solid #fff;outline-offset:-2px}
 
 /* ---- resume banner ---- */
 .resume{

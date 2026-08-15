@@ -6,6 +6,7 @@
   "description": "Officer of the Day race management PWA for Netley Sailing Club.",
   "comment": "Node is only ever used to run the tests. Nothing here is built, bundled or shipped — GitHub Pages serves the repo as-is.",
   "scripts": {
+    "stamp": "node tools/stamp-sw.mjs",
     "test": "node --test \"tests/**/*.test.js\""
   },
   "devDependencies": {
