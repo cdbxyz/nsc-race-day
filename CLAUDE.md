@@ -30,3 +30,7 @@ Hard rules:
   maintain this one day.
 - The sw.js cache version and shell list are GENERATED — run `npm run stamp`,
   never edit the block by hand. `npm test` fails if they have drifted.
+
+  - CLAUDE.md is living documentation. Any session that changes a
+  convention this file describes (fonts, tooling, workflows, naming)
+  must update the relevant rule in the same commit.

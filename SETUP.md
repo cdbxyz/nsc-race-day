@@ -143,7 +143,7 @@ already-installed phones there is a new build — see the README.)
 Editor**:
 
 ```sql
-select set_club_pin('<the club PIN>');
+select set_club_pin('1957');
 ```
 
 Minimum four characters; six digits is a reasonable club choice. It is stored
