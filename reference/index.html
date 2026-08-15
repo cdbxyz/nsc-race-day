@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NSC Race Calculator — Portsmouth Yardstick</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --mist:#F2F5FA; --chalk:#FFFFFF; --ink:#0A1B3D; --hull:#1B3B76;
+  --slate:#5F6E8C; --line:#D2DAE8; --flag:#C8102E;
+  --disp:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--mist);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+.wrap{max-width:1180px;margin:0 auto;padding:16px 14px 56px}
+@media(min-width:760px){.wrap{padding:24px 20px 64px}}
+
+.mast{background:var(--ink);color:#fff;margin:-16px -14px 0;padding:18px 14px 16px}
+@media(min-width:760px){.mast{margin:-24px -20px 0;padding:26px 20px 20px;border-radius:0 0 3px 3px}}
+.mast .eyebrow{color:#9FC0F0}
+.mast h1{color:#fff}
+.mast h1 .thin{color:#B9CCEA}
+.eyebrow{font-family:var(--disp);font-weight:600;text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;color:var(--slate)}
+h1{font-family:var(--disp);font-weight:700;text-transform:uppercase;font-size:clamp(1.9rem,7vw,2.9rem);line-height:.95;letter-spacing:.005em;margin:.14em 0 .55em}
+h1 .thin{color:var(--hull);font-weight:500}
+
+.plate{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:3px;padding:10px 12px;display:flex;align-items:center;gap:12px}
+
+.formula{font-family:var(--mono);font-size:.8rem;display:flex;align-items:center;gap:.5em;flex-wrap:wrap}
+.formula .lead{color:#9FC0F0}
+.formula .op{color:var(--slate)}
+.frac{display:inline-flex;flex-direction:column;text-align:center;line-height:1.2}
+.frac .over{border-bottom:1px solid var(--slate);padding:0 .35em}
+.frac .under{padding:0 .35em}
+
+.switch{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.track{width:44px;height:24px;border-radius:999px;background:#3E568C;position:relative;transition:background .18s ease;flex:none}
+.knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .18s ease}
+.switch input:checked + .track{background:var(--flag)}
+.switch input:checked + .track .knob{transform:translateX(20px)}
+.switch input:focus-visible + .track{outline:2px solid #9FC0F0;outline-offset:2px}
+.switch .lbl{font-family:var(--disp);text-transform:uppercase;letter-spacing:.11em;font-size:.8rem;font-weight:600;color:#fff}
+
+.sitefoot{margin-top:20px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pylink{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 14px;border:1px solid var(--ink);border-radius:2px;background:var(--chalk);color:var(--ink);text-decoration:none;font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:.8rem;font-weight:600}
+.pylink:hover{background:var(--ink);color:#fff}
+.pylink:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.sitefoot span{font-size:.76rem;color:var(--slate)}
+.tabs{display:flex;gap:5px;margin:16px 0 0}
+.tab{flex:1;font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:.8rem;font-weight:600;padding:12px 8px;min-height:46px;border:1px solid var(--line);border-bottom:none;background:var(--chalk);color:var(--slate);cursor:pointer;border-radius:3px 3px 0 0}
+.tab[aria-selected="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tab:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.tabpanel[hidden]{display:none}
+.settings{display:grid;grid-template-columns:repeat(12,1fr);gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:#F8FAFE}
+.s-len,.s-gun{grid-column:span 6}
+.s-name{grid-column:span 12}
+@media(min-width:560px){
+  .entry.p .c-name{grid-column:span 5}.entry.p .c-class{grid-column:span 3}
+  .entry.p .c-py{grid-column:span 2}.entry.p .c-kill{grid-column:span 2}
+  .entry.p .kill{min-width:0;padding:0 6px;font-size:.7rem}
+  .s-len,.s-gun{grid-column:span 3}.s-name{grid-column:span 6}
+}
+@media(min-width:760px){.sortbar.always{display:flex}}
+.finishnote{padding:10px 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:.78rem;color:var(--hull)}
+.cols{display:grid;grid-template-columns:1fr;gap:18px;margin-top:18px}
+@media(min-width:1000px){.cols{grid-template-columns:minmax(340px,.9fr) 1.1fr;align-items:start}}
+.panel{background:var(--chalk);border:1px solid var(--line);border-radius:3px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.panel-title{font-family:var(--disp);text-transform:uppercase;letter-spacing:.15em;font-size:.82rem;font-weight:700;color:var(--ink)}
+.count{font-family:var(--mono);font-size:.74rem;color:var(--slate)}
+
+/* entries */
+.entries{padding:9px;display:flex;flex-direction:column;gap:9px}
+.entry{border:1px solid var(--line);border-left:3px solid var(--hull);border-radius:2px;padding:9px;background:#FBFCFE;display:grid;grid-template-columns:repeat(12,1fr);gap:7px}
+.entry.dud{border-left-color:var(--line);background:#F3F6FB}
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field label{font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-size:.66rem;font-weight:600;color:var(--slate)}
+.field input{font-family:var(--mono);font-size:16px;color:var(--ink);border:1px solid var(--line);border-radius:2px;background:var(--chalk);padding:7px 6px;width:100%;min-width:0;text-align:center}
+.field input.text{font-family:var(--body);text-align:left;padding-left:8px}
+.field input:focus-visible{outline:2px solid var(--hull);outline-offset:-1px;border-color:var(--hull)}
+.c-name{grid-column:span 12}
+.c-class{grid-column:span 7}
+.c-py{grid-column:span 5}
+.c-h,.c-m,.c-s,.c-laps{grid-column:span 3}
+.c-code{grid-column:span 6}
+.c-kill{grid-column:span 6;display:flex;justify-content:flex-end}
+.field select{font-family:var(--mono);font-size:16px;color:var(--ink);border:1px solid var(--line);border-radius:2px;background:var(--chalk);padding:7px 6px;width:100%;min-height:38px}
+.field select:focus-visible{outline:2px solid var(--hull);outline-offset:-1px}
+.entry.coded{border-left-color:var(--flag)}
+.pos.codecell{font-size:1rem;letter-spacing:.06em;color:var(--flag)}
+.card.out .cpos.codecell{font-size:1rem;color:var(--flag)}
+.lapoff .c-laps{display:none}
+.lapoff .c-h,.lapoff .c-m,.lapoff .c-s{grid-column:span 4}
+@media(min-width:560px){
+  .c-name{grid-column:span 5}.c-class{grid-column:span 4}.c-py{grid-column:span 3}
+  .c-h,.c-m,.c-s,.c-laps{grid-column:span 2}
+  .c-code{grid-column:span 2}
+  .c-kill{grid-column:span 2;align-items:flex-end}
+  .entry .kill{min-width:0;padding:0 6px;font-size:.7rem}
+  .lapoff .c-h,.lapoff .c-m,.lapoff .c-s{grid-column:span 2}
+  .lapoff .c-code{grid-column:span 3}
+  .lapoff .c-kill{grid-column:span 3}
+}
+.kill{border:1px solid var(--line);background:var(--chalk);border-radius:2px;padding:0 14px;height:38px;min-width:96px;cursor:pointer;color:var(--slate);font-family:var(--disp);font-size:.76rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.kill:hover{border-color:var(--flag);color:var(--flag)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 9px 11px}
+button.btn{font-family:var(--disp);text-transform:uppercase;letter-spacing:.11em;font-weight:600;font-size:.82rem;padding:11px 15px;border-radius:2px;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;flex:1 1 auto;min-height:44px}
+button.btn.ghost{background:transparent;color:var(--ink)}
+button.btn:hover{background:var(--hull);border-color:var(--hull);color:var(--chalk)}
+button.btn:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+@media(min-width:560px){button.btn{flex:0 0 auto}}
+
+/* sort bar (small screens) */
+.sortbar{display:flex;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:.74rem;color:var(--slate)}
+.sortbar select{flex:1;font-family:var(--body);font-size:15px;text-transform:none;letter-spacing:0;padding:8px;border:1px solid var(--line);border-radius:2px;background:var(--chalk);color:var(--ink);min-height:40px}
+.dirbtn{border:1px solid var(--line);background:var(--chalk);border-radius:2px;width:44px;min-height:40px;cursor:pointer;color:var(--ink);font-size:.9rem}
+@media(min-width:760px){.sortbar{display:none}}
+
+/* mobile result cards */
+.cards{padding:8px}
+.card{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"pos who time" "gap gap gap";gap:4px 10px;align-items:center;padding:10px 6px;border-bottom:1px solid #E6EBF4}
+.card:last-child{border-bottom:none}
+.cpos{grid-area:pos;font-family:var(--disp);font-weight:700;font-size:1.9rem;line-height:1;min-width:1.4em}
+.card.lead .cpos{color:var(--flag)}
+.cwho{grid-area:who;min-width:0}
+.cboat{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmeta{font-family:var(--mono);font-size:.68rem;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctime{grid-area:time;text-align:right}
+.ccorr{font-family:var(--mono);font-weight:600;font-size:1rem;font-variant-numeric:tabular-nums}
+.celap{font-family:var(--mono);font-size:.68rem;color:var(--slate)}
+.cgap{grid-area:gap;margin-top:2px}
+.card.out{opacity:.62}
+.card.out .cpos{font-size:1.2rem;color:var(--slate)}
+
+/* desktop table */
+.board{width:100%;border-collapse:collapse;display:none}
+@media(min-width:760px){.board{display:table}.cards{display:none}}
+.board th{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:.72rem;font-weight:600;color:var(--slate);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer}
+.board th:hover{color:var(--ink)}
+.board th .car{opacity:0;font-size:.7em}
+.board th.on{color:var(--ink)}
+.board th.on .car{opacity:1;color:var(--flag)}
+.board td{padding:9px 10px;border-bottom:1px solid #E6EBF4;vertical-align:middle}
+.board tr:last-child td{border-bottom:none}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.pos{font-family:var(--disp);font-weight:700;font-size:1.5rem;line-height:1;width:1%;white-space:nowrap}
+tr.lead .pos{color:var(--flag)}
+tr.lead .boat{font-weight:600}
+.boat{font-weight:500}
+.klass{font-size:.78rem;color:var(--slate)}
+.corr{font-weight:600}
+.ladj{color:var(--hull)}
+.gapcell{width:30%;min-width:110px}
+tr.out td{color:var(--slate);background:#F5F8FD}
+
+.gapbar{height:8px;background:#E6EBF4;border-radius:1px;overflow:hidden}
+.gapbar i{display:block;height:100%;background:var(--hull);border-radius:1px}
+.lead .gapbar i{background:var(--flag)}
+.gaptxt{font-family:var(--mono);font-size:.7rem;color:var(--slate);margin-top:3px;display:block}
+
+.empty{padding:30px 16px;text-align:center;color:var(--slate)}
+.empty p{margin:0 0 14px}
+.linkish{background:none;border:none;padding:0;color:var(--hull);cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:3px}
+.foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);font-size:.76rem;color:var(--slate);display:flex;flex-direction:column;gap:5px}
+.refhead{font-family:var(--disp);text-transform:uppercase;letter-spacing:.15em;font-size:.74rem;font-weight:700;color:var(--ink)}
+.foot .formula{color:var(--hull);font-size:.78rem;margin:2px 0 6px}
+.foot .formula .lead{color:var(--ink)}
+.foot .formula .op{color:var(--slate)}
+.racefield{font-family:var(--disp);font-size:1.05rem;font-weight:600;border:none;border-bottom:1px dashed var(--line);background:transparent;padding:4px 0;width:100%;color:var(--ink);order:3}
+.racefield:focus-visible{outline:none;border-bottom-color:var(--hull)}
+.copybox{width:100%;height:140px;font-family:var(--mono);font-size:.75rem;margin:8px 0 0}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+@media print{
+  @page{margin:14mm}
+  body{background:#fff}
+  .noprint{display:none!important}
+  .printonly{display:block}
+  .wrap{max-width:none;padding:0}
+  .panel{border:none}
+  .cards{display:none!important}
+  .board{display:table!important}
+  .board td,.board th{padding:6px 8px}
+  .gapbar{border:1px solid #999;background:#fff}
+  .gapbar i{background:#555}
+  .lead .gapbar i{background:#000}
+  .pos{color:#000!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="noprint mast">
+    <div class="eyebrow">RYA Portsmouth Yardstick</div>
+    <h1>NSC <span class="thin">Race Calculator</span></h1>
+    <div class="plate">
+      <label class="switch">
+        <input type="checkbox" id="lapmode" checked>
+        <span class="track"><span class="knob"></span></span>
+        <span class="lbl">Show laps</span>
+      </label>
+    </div>
+  </header>
+
+  <div class="tabs noprint" role="tablist">
+    <button class="tab" id="tab-btn-c" role="tab" aria-selected="true" aria-controls="tab-corrected">Corrected time</button>
+    <button class="tab" id="tab-btn-p" role="tab" aria-selected="false" aria-controls="tab-pursuit">Pursuit starts</button>
+  </div>
+
+  <section id="tab-corrected" class="tabpanel" role="tabpanel">
+  <div class="printonly" id="printhead"></div>
+
+  <div class="cols">
+    <section class="panel noprint" aria-labelledby="entries-title">
+      <div class="panel-head">
+        <span class="panel-title" id="entries-title">Finishers</span>
+        <span class="count" id="entrycount"></span>
+      </div>
+      <div class="entries" id="entries"></div>
+      <div class="actions">
+        <button class="btn" id="add">Add boat</button>
+        <button class="btn ghost" id="clear">Clear race</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="board-title">
+      <div class="panel-head">
+        <span class="panel-title" id="board-title">Results</span>
+        <span class="count noprint" id="boardcount"></span>
+      </div>
+      <div class="sortbar noprint" id="sortbar">
+        <span>Sort</span>
+        <select id="sortsel" aria-label="Sort results by"></select>
+        <button class="dirbtn" id="sortdir" aria-label="Reverse sort order">&#9650;</button>
+      </div>
+      <div id="boardwrap"></div>
+      <div class="actions noprint">
+        <button class="btn ghost" id="copy">Copy results</button>
+        <button class="btn ghost" id="pdf">Save as PDF</button>
+        <button class="btn ghost" id="print">Print</button>
+      </div>
+      <div style="padding:0 10px 12px" id="copyzone"></div>
+    </section>
+  </div>
+
+  <div class="foot noprint">
+    <div class="refhead">How the calculation works</div>
+    <div class="formula" id="formula"></div>
+    <span id="foot1">Lowest corrected time wins. Max laps is taken from the boat that sailed furthest.</span>
+    <span id="foot2">Boats with no elapsed time, PY or lap count are held out of the order.</span>
+    <span id="foot3"></span>
+  </div>
+  </section>
+
+  <section id="tab-pursuit" class="tabpanel" role="tabpanel" hidden>
+    <div class="printonly" id="p-printhead"></div>
+    <div class="cols">
+
+      <section class="panel noprint">
+        <div class="panel-head">
+          <span class="panel-title">Race &amp; boats</span>
+          <span class="count" id="p-count"></span>
+        </div>
+        <div class="settings">
+          <div class="field s-len"><label>Race length (mins)</label>
+            <input id="p-length" inputmode="decimal" value="60" aria-label="Race length in minutes"></div>
+          <div class="field s-gun"><label>First gun</label>
+            <input id="p-gun" type="time" value="14:00" aria-label="Time of first gun"></div>
+          <div class="field s-name"><label>Race name</label>
+            <input class="text" id="p-name" placeholder="Sunday pursuit" aria-label="Race name"></div>
+        </div>
+        <div class="entries" id="p-entries"></div>
+        <div class="actions">
+          <button class="btn" id="p-add">Add boat</button>
+          <button class="btn ghost" id="p-clear">Clear</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Start sequence</span>
+          <span class="count noprint" id="p-boardcount"></span>
+        </div>
+        <div class="sortbar always noprint" id="p-sortbar">
+          <span>Sort</span>
+          <select id="p-sortsel" aria-label="Sort start sequence by"></select>
+          <button class="dirbtn" id="p-sortdir" aria-label="Reverse sort order">&#9650;</button>
+        </div>
+        <div id="p-boardwrap"></div>
+        <div class="finishnote" id="p-finish"></div>
+        <div class="actions noprint">
+          <button class="btn ghost" id="p-copy">Copy sequence</button>
+          <button class="btn ghost" id="p-pdf">Save as PDF</button>
+          <button class="btn ghost" id="p-print">Print</button>
+        </div>
+        <div style="padding:0 10px 12px" id="p-copyzone"></div>
+      </section>
+    </div>
+
+    <div class="foot noprint">
+      <div class="refhead">How the calculation works</div>
+      <div class="formula">
+        <span class="lead">start delay</span> <span class="op">=</span> race length <span class="op">&times;</span>
+        <span class="frac"><span class="over">slowest PY &minus; boat PY</span><span class="under">slowest PY</span></span>
+      </div>
+      <span>The slowest boat in the fleet starts on the gun; everyone else waits. Sailed exactly to handicap, the whole fleet converges on the finish at the same moment.</span>
+      <span>Boats with no PY number are left out of the sequence.</span>
+    </div>
+  </section>
+
+  <div class="sitefoot noprint">
+    <a class="pylink" href="https://assetbank-eu-west-1.s3.eu-west-1.amazonaws.com/rya-assets_87113cb4549df15cff38e2cd071931c5/db0/PY_List_2026_FINAL_V4.pdf?response-content-disposition=inline%3B%20filename%3D%22db0%2FPY_List_2026_FINAL_V4.pdf%22%3B%20filename%2A%3DUTF-8%27%27db0%252FPY%255FList%255F2026%255FFINAL%255FV4%252Epdf&amp;response-content-type=application%2Fpdf&amp;X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Date=20260810T113607Z&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Credential=AKIATJ7XNAYVAWNFIK7R%2F20260810%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Expires=604800&amp;X-Amz-Signature=7cfe36acaf98582db2c441ca270bfb1369b78f705e8818fe49a11d1ca32514a7"
+       target="_blank" rel="noopener noreferrer">RYA PY list 2026 (PDF) &#8599;</a>
+    <span>Opens in a new tab &mdash; the national base numbers to start from.</span>
+  </div>
+</div>
+
+<script>
+/* ---------- shared PDF writer (loads jsPDF on demand, falls back to print) ---------- */
+var NSCPDF = (function(){
+  "use strict";
+  var LIB = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+  var loading = null;
+
+  function load(){
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+    if (loading) return loading;
+    loading = new Promise(function(res, rej){
+      var t = document.createElement("script");
+      t.src = LIB;
+      t.onload = function(){
+        (window.jspdf && window.jspdf.jsPDF) ? res() : rej(new Error("jsPDF missing"));
+      };
+      t.onerror = function(){ rej(new Error("offline")); };
+      document.head.appendChild(t);
+      setTimeout(function(){ rej(new Error("timeout")); }, 12000);
+    });
+    return loading;
+  }
+
+  /* cfg: {title, subtitle, meta, columns:[{label,width,align}], rows:[[cell,...]],
+           muted:[rowIndex], filename} */
+  function draw(cfg){
+    var doc = new window.jspdf.jsPDF({unit:"pt", format:"a4"});
+    var W = doc.internal.pageSize.getWidth();
+    var H = doc.internal.pageSize.getHeight();
+    var M = 40, y = 0;
+    var NAVY = [10,27,61], SLATE = [95,110,140], LINE = [210,218,232], RED = [200,16,46];
+
+    function header(){
+      doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+      doc.rect(0,0,W,74,"F");
+      doc.setTextColor(159,192,240);
+      doc.setFont("helvetica","bold"); doc.setFontSize(8);
+      doc.text("NSC RACE CALCULATOR \u00B7 " + cfg.subtitle.toUpperCase(), M, 30);
+      doc.setTextColor(255,255,255); doc.setFontSize(19);
+      doc.text(cfg.title || "Race", M, 55);
+      y = 96;
+      doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8);
+      var lines = doc.splitTextToSize(cfg.meta || "", W - M*2);
+      doc.text(lines, M, y);
+      y += lines.length * 11 + 10;
+      colHeads();
+    }
+
+    var total = cfg.columns.reduce(function(a,c){ return a + c.width; }, 0);
+    var scale = (W - M*2) / total;
+    function xOf(i){
+      var x = M;
+      for (var j = 0; j < i; j++) x += cfg.columns[j].width * scale;
+      return x;
+    }
+    function place(i, text){
+      var c = cfg.columns[i], w = c.width * scale, x = xOf(i);
+      if (c.align === "right") doc.text(String(text), x + w - 6, y, {align:"right"});
+      else doc.text(String(text), x, y);
+    }
+
+    function colHeads(){
+      doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+      doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+      cfg.columns.forEach(function(c,i){ place(i, c.label.toUpperCase()); });
+      y += 6;
+      doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(.8);
+      doc.line(M, y, W - M, y);
+      y += 15;
+    }
+
+    header();
+    doc.setFontSize(9.5);
+
+    cfg.rows.forEach(function(row, n){
+      if (y > H - 60){ doc.addPage(); y = 60; colHeads(); doc.setFontSize(9.5); }
+      var muted = cfg.muted && cfg.muted.indexOf(n) > -1;
+      var lead = !muted && n === 0;
+      row.forEach(function(cell, i){
+        doc.setFont("helvetica", (i === 0 || lead) ? "bold" : "normal");
+        if (muted) doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+        else if (lead && i === 0) doc.setTextColor(RED[0],RED[1],RED[2]);
+        else doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        place(i, cell == null ? "\u2014" : cell);
+      });
+      y += 9;
+      doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.setLineWidth(.4);
+      doc.line(M, y, W - M, y);
+      y += 15;
+    });
+
+    doc.setFont("helvetica","normal"); doc.setFontSize(7);
+    doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+    var pages = doc.internal.getNumberOfPages();
+    for (var pg = 1; pg <= pages; pg++){
+      doc.setPage(pg);
+      doc.text(cfg.footer || "", M, H - 24);
+      doc.text(pg + " / " + pages, W - M, H - 24, {align:"right"});
+    }
+    return doc;
+  }
+
+  var IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  function openBlob(blob, tab){
+    var url = URL.createObjectURL(blob);
+    if (tab && !tab.closed) tab.location.href = url;
+    else window.location.href = url;
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+  }
+
+  function deliver(cfg, tab){
+    var doc = draw(cfg);
+    if (!IOS){
+      if (tab && !tab.closed) tab.close();
+      doc.save(cfg.filename);
+      return;
+    }
+    // iOS ignores the download attribute, so hand the file to the share sheet
+    // (Save to Files keeps the filename) and fall back to the PDF viewer.
+    var blob = doc.output("blob"), file = null;
+    try { file = new File([blob], cfg.filename, {type:"application/pdf"}); } catch (e){}
+    if (!tab && file && navigator.share && navigator.canShare
+        && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:cfg.title || "Race results"})
+        .catch(function(){ openBlob(blob, null); });
+      return;
+    }
+    openBlob(blob, tab);
+  }
+
+  function save(cfg, btn){
+    var label = btn.textContent;
+    var ready = !!(window.jspdf && window.jspdf.jsPDF);
+    // if the library still has to load, the gesture is gone by the time it lands,
+    // so claim a tab now while we are still allowed to
+    var tab = (IOS && !ready) ? window.open("", "_blank") : null;
+
+    if (ready){
+      try { deliver(cfg, null); btn.textContent = "Saved"; }
+      catch (e){ window.print(); btn.textContent = label; return; }
+      setTimeout(function(){ btn.textContent = label; }, 1800);
+      return;
+    }
+
+    btn.textContent = "Building\u2026";
+    btn.disabled = true;
+    load().then(function(){
+      deliver(cfg, tab);
+      btn.textContent = "Saved";
+      setTimeout(function(){ btn.textContent = label; btn.disabled = false; }, 1800);
+    }).catch(function(){
+      if (tab && !tab.closed) tab.close();
+      btn.textContent = label; btn.disabled = false;
+      window.print();
+    });
+  }
+
+  return {save:save};
+})();
+
+(function(){
+  "use strict";
+  var uid = 0;
+  var state = { race:"", lapMode:true, sortKey:"corrected", sortDir:1, entries:[] };
+
+  function nnum(v){ var n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+  var CODES = {
+    DNC:"did not come to the starting area",
+    DNS:"did not start",
+    OCS:"on the course side at the start",
+    DNF:"did not finish",
+    RET:"retired",
+    DSQ:"disqualified"
+  };
+  var CODE_ORDER = ["DNC","DNS","OCS","DNF","RET","DSQ"];
+  function pts(v){
+    if (v == null) return "\u2014";
+    return (Math.round(v * 10) % 10 === 0) ? String(Math.round(v)) : v.toFixed(1);
+  }
+  function blank(){
+    return {id:++uid, name:"", cls:"", py:"", h:"", m:"", s:"", laps:"", code:""};
+  }
+  function seed(){ state.entries = [blank(), blank(), blank()]; }
+
+  function sample(){
+    state.race = "Demonstration race";
+    state.entries = [
+      {id:++uid, name:"Fly",   cls:"", py:"943", h:"1", m:"0",  s:"0",  laps:"3", code:""},
+      {id:++uid, name:"Vaila", cls:"", py:"930", h:"0", m:"59", s:"0",  laps:"3", code:""},
+      {id:++uid, name:"Sirocco",cls:"",py:"1010",h:"0", m:"41", s:"30", laps:"2", code:""},
+      {id:++uid, name:"Kittiwake",cls:"",py:"1099",h:"", m:"", s:"",    laps:"",  code:"DNF"},
+      blank()
+    ];
+    render();
+  }
+
+  function compute(){
+    var rows = state.entries.map(function(e){
+      var elapsed = nnum(e.h)*3600 + nnum(e.m)*60 + nnum(e.s);
+      var py = nnum(e.py), laps = nnum(e.laps);
+      var r = {id:e.id, name:(e.name||"").trim(), cls:(e.cls||"").trim(),
+               py:py, laps:laps, elapsed:elapsed, corrected:null, reason:"", code:e.code || ""};
+      if (r.code) r.reason = CODES[r.code] || r.code;
+      else if (elapsed <= 0) r.reason = "no elapsed time";
+      else if (py <= 0) r.reason = "no PY number";
+      else if (state.lapMode && laps <= 0) r.reason = "no lap count";
+      return r;
+    });
+
+    var scored = rows.filter(function(r){ return !r.reason; });
+    var maxLaps = 0;
+    scored.forEach(function(r){ if (r.laps > maxLaps) maxLaps = r.laps; });
+    if (!maxLaps) maxLaps = 1;
+
+    scored.forEach(function(r){
+      r.corrected = state.lapMode
+        ? (r.elapsed * maxLaps * 1000) / (r.py * r.laps)
+        : (r.elapsed * 1000) / r.py;
+      r.ladj = state.lapMode ? (r.elapsed * maxLaps) / r.laps : r.elapsed;
+      r.rounded = Math.round(r.corrected);
+    });
+    scored.sort(function(a,b){ return a.rounded - b.rounded || a.name.localeCompare(b.name); });
+
+    var best = scored.length ? scored[0].rounded : 0;
+    var worst = scored.length ? scored[scored.length-1].rounded : 0;
+    scored.forEach(function(r,i){
+      if (i > 0 && r.rounded === scored[i-1].rounded){ r.place = scored[i-1].place; r.tied = true; }
+      else { r.place = i + 1; r.tied = false; }
+      r.gap = r.rounded - best;
+      r.frac = worst > best ? (r.rounded - best) / (worst - best) : 0;
+    });
+    scored.forEach(function(r,i){
+      var nx = scored[i+1];
+      if (nx && nx.rounded === r.rounded) r.tied = true;
+    });
+
+    var out = rows.filter(function(r){
+      return r.reason && (r.code || r.name || r.py > 0 || r.elapsed > 0);
+    });
+
+    // RRS low-point scoring: finishers score their place, coded boats score starters + 1
+    var starters = scored.length + out.filter(function(r){ return r.code; }).length;
+    var penalty = starters + 1;
+    scored.forEach(function(r){
+      var tiedWith = scored.filter(function(x){ return x.rounded === r.rounded; });
+      var sum = 0;
+      tiedWith.forEach(function(x, i){ sum += r.place + i; });
+      r.points = sum / tiedWith.length;
+    });
+    out.forEach(function(r){ r.points = r.code ? penalty : null; });
+
+    return { scored: scored, out: out, maxLaps: maxLaps, penalty: penalty, starters: starters };
+  }
+
+  function hms(sec){
+    sec = Math.round(sec);
+    var h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+    return h + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+  }
+  function gapTxt(sec){
+    if (!sec) return "leader";
+    var m = Math.floor(sec/60), s = sec%60;
+    return "+" + (m ? m + ":" + String(s).padStart(2,"0") : s + "s");
+  }
+  function esc(t){
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];
+    });
+  }
+
+  function renderFoot(){
+    document.getElementById("foot1").textContent = state.lapMode
+      ? "Lap-adjusted elapsed = elapsed \u00D7 max laps \u00F7 laps sailed \u2014 every boat normalised to the longest course, before PY."
+      : "Laps hidden \u2014 every boat is scored over one lap of the same course.";
+    var d = compute();
+    document.getElementById("foot3").textContent =
+      "Points use the RRS low-point system: a finisher scores its place (tied boats share the average), "
+      + "and any coded boat scores starters + 1 = " + d.penalty + ". Codes: DNC, DNS, OCS, DNF, RET, DSQ.";
+    document.getElementById("foot2").textContent = state.lapMode
+      ? "Boats with no elapsed time, PY or lap count are held out of the order."
+      : "Boats with no elapsed time or PY number are held out of the order.";
+  }
+
+  function renderFormula(){
+    document.getElementById("formula").innerHTML = state.lapMode
+      ? '<span class="lead">lap adj.</span> <span class="op">=</span> '
+        + '<span class="frac"><span class="over">elapsed &times; max laps</span>'
+        + '<span class="under">laps sailed</span></span>'
+        + '<span class="op">&nbsp;&rarr;&nbsp;</span>'
+        + '<span class="lead">corrected</span> <span class="op">=</span> '
+        + '<span class="frac"><span class="over">lap adj. &times; 1000</span>'
+        + '<span class="under">PY</span></span>'
+      : '<span class="lead">corrected</span> <span class="op">=</span> '
+        + '<span class="frac"><span class="over">elapsed &times; 1000</span>'
+        + '<span class="under">PY</span></span>';
+  }
+
+  function countText(){
+    var n = state.entries.filter(function(e){
+      return (e.name||"").trim() || nnum(e.py) > 0 || nnum(e.h)+nnum(e.m)+nnum(e.s) > 0;
+    }).length;
+    return n + (n === 1 ? " boat" : " boats");
+  }
+
+  function fld(cls,label,key,val,kind,ph){
+    var extra = kind === "text" ? ' class="text"' : ' inputmode="decimal"';
+    return '<div class="field ' + cls + '">'
+      + '<label>' + label + '</label>'
+      + '<input' + extra + ' data-key="' + key + '" value="' + esc(val) + '"'
+      + ' placeholder="' + (ph || "") + '" aria-label="' + label + '">'
+      + '</div>';
+  }
+
+  function renderEntries(){
+    var box = document.getElementById("entries");
+    box.className = "entries" + (state.lapMode ? "" : " lapoff");
+    box.innerHTML = state.entries.map(function(e){
+      var live = !e.code && (nnum(e.h)*3600 + nnum(e.m)*60 + nnum(e.s)) > 0 && nnum(e.py) > 0;
+      return '<div class="entry' + (live ? "" : " dud") + (e.code ? " coded" : "")
+        + '" data-id="' + e.id + '">'
+        + fld("c-name","Boat","name",e.name,"text","Sail number or name")
+        + fld("c-class","Class","cls",e.cls,"text","Laser")
+        + fld("c-py","PY","py",e.py,"num","1099")
+        + fld("c-h","Hrs","h",e.h,"num","0")
+        + fld("c-m","Min","m",e.m,"num","0")
+        + fld("c-s","Sec","s",e.s,"num","0")
+        + fld("c-laps","Laps","laps",e.laps,"num","1")
+        + '<div class="field c-code"><label>Code</label>'
+        + '<select data-key="code" aria-label="Race code"><option value="">Finished</option>'
+        + CODE_ORDER.map(function(c){
+            return '<option value="' + c + '"' + (e.code === c ? " selected" : "") + '>' + c + '</option>';
+          }).join("")
+        + '</select></div>'
+        + '<div class="c-kill"><button class="kill" data-kill="' + e.id + '">Remove</button></div>'
+        + '</div>';
+    }).join("");
+    document.getElementById("entrycount").textContent = countText();
+  }
+
+  var SORTS = [["corrected","Corrected time"],["place","Position"],["name","Boat"],
+               ["cls","Class"],["py","PY"],["laps","Laps"],
+               ["elapsed","Elapsed time"],["ladj","Lap-adjusted time"]];
+
+  function renderSortBar(){
+    var sel = document.getElementById("sortsel");
+    sel.innerHTML = SORTS.filter(function(s){ return ["laps","ladj"].indexOf(s[0]) < 0 || state.lapMode; })
+      .map(function(s){
+        return '<option value="' + s[0] + '"' + (state.sortKey === s[0] ? " selected" : "") + '>' + s[1] + '</option>';
+      }).join("");
+    document.getElementById("sortdir").innerHTML = state.sortDir > 0 ? "&#9650;" : "&#9660;";
+  }
+
+  function sortRows(rows){
+    var k = state.sortKey, d = state.sortDir, out = rows.slice();
+    out.sort(function(a,b){
+      var x, y;
+      if (k === "name" || k === "cls"){
+        x = a[k].toLowerCase(); y = b[k].toLowerCase();
+        return x < y ? -d : x > y ? d : 0;
+      }
+      x = (k === "place") ? a.place : a[k];
+      y = (k === "place") ? b.place : b[k];
+      return (x - y) * d;
+    });
+    return out;
+  }
+
+  function bar(r){
+    return '<div class="gapbar"><i style="width:'
+      + (r.place === 1 ? 100 : Math.max(3, Math.round(r.frac * 100))) + '%"></i></div>'
+      + '<span class="gaptxt">' + gapTxt(r.gap) + '</span>';
+  }
+
+  function renderBoard(){
+    var data = compute();
+    var wrap = document.getElementById("boardwrap");
+    document.getElementById("boardcount").textContent =
+      data.scored.length ? data.scored.length + " scored" : "";
+    document.getElementById("sortbar").style.display = data.scored.length ? "" : "none";
+
+    if (!data.scored.length && !data.out.length){
+      wrap.innerHTML = '<div class="empty"><p>No boats scored yet. Add a PY number, an elapsed '
+        + 'time and a lap count to see the corrected order.</p>'
+        + '<button class="linkish" id="demo">Load a sample race</button></div>';
+      document.getElementById("demo").addEventListener("click", sample);
+      return;
+    }
+
+    var rows = sortRows(data.scored);
+
+    /* cards (small screens) */
+    var cards = '<div class="cards">';
+    rows.forEach(function(r){
+      var meta = ["PY " + r.py];
+      if (state.lapMode) meta.push(r.laps + (r.laps === 1 ? " lap" : " laps"));
+      meta.push(pts(r.points) + " pts");
+      if (r.cls) meta.push(r.cls);
+      cards += '<article class="card' + (r.place === 1 ? " lead" : "") + '">'
+        + '<div class="cpos">' + (r.tied ? "=" : "") + r.place + '</div>'
+        + '<div class="cwho"><div class="cboat">' + (esc(r.name) || "Unnamed") + '</div>'
+        + '<div class="cmeta">' + esc(meta.join(" \u00B7 ")) + '</div></div>'
+        + '<div class="ctime"><div class="ccorr">' + hms(r.corrected) + '</div>'
+        + '<div class="celap">elapsed ' + hms(r.elapsed)
+        + (state.lapMode ? '<br>lap adj. ' + hms(r.ladj) : '') + '</div></div>'
+        + '<div class="cgap">' + bar(r) + '</div></article>';
+    });
+    data.out.forEach(function(r){
+      cards += '<article class="card out"><div class="cpos' + (r.code ? " codecell" : "") + '">'
+        + (r.code || "\u2014") + '</div>'
+        + '<div class="cwho"><div class="cboat">' + (esc(r.name) || "Unnamed") + '</div>'
+        + '<div class="cmeta">' + (r.code ? "" : "not scored \u2014 ") + r.reason + '</div></div>'
+        + '<div class="ctime"><div class="ccorr">' + pts(r.points) + '</div>'
+        + '<div class="celap">' + (r.code ? "pts" : (r.elapsed > 0 ? "elapsed " + hms(r.elapsed) : "&nbsp;"))
+        + '</div></div></article>';
+    });
+    cards += '</div>';
+
+    /* table (wide screens + print) */
+    var head = [["place","Pos"],["name","Boat"],["cls","Class"],["py","PY"]];
+    if (state.lapMode) head.push(["laps","Laps"]);
+    head.push(["elapsed","Elapsed"]);
+    if (state.lapMode) head.push(["ladj","Lap adj."]);
+    head.push(["corrected","Corrected"],["points","Pts"]);
+
+    var table = '<table class="board"><thead><tr>'
+      + head.map(function(h){
+          var on = state.sortKey === h[0];
+          var align = ["py","laps","elapsed","ladj","corrected","points"].indexOf(h[0]) > -1 ? ' style="text-align:right"' : '';
+          return '<th' + align + ' class="' + (on ? "on" : "") + '" data-sort="' + h[0] + '" scope="col" tabindex="0">'
+            + h[1] + ' <span class="car">' + (on && state.sortDir < 0 ? "\u25B2" : "\u25BC") + '</span></th>';
+        }).join("")
+      + '<th class="gapcell" scope="col">Behind leader</th></tr></thead><tbody>';
+
+    rows.forEach(function(r){
+      table += '<tr class="' + (r.place === 1 ? "lead" : "") + '">'
+        + '<td class="pos">' + (r.tied ? "=" : "") + r.place + '</td>'
+        + '<td class="boat">' + (esc(r.name) || '<span class="klass">unnamed</span>') + '</td>'
+        + '<td class="klass">' + (esc(r.cls) || "\u2014") + '</td>'
+        + '<td class="num">' + r.py + '</td>'
+        + (state.lapMode ? '<td class="num">' + r.laps + '</td>' : '')
+        + '<td class="num">' + hms(r.elapsed) + '</td>'
+        + (state.lapMode ? '<td class="num ladj">' + hms(r.ladj) + '</td>' : '')
+        + '<td class="num corr">' + hms(r.corrected) + '</td>'
+        + '<td class="num">' + pts(r.points) + '</td>'
+        + '<td class="gapcell">' + bar(r) + '</td></tr>';
+    });
+    data.out.forEach(function(r){
+      table += '<tr class="out"><td class="pos' + (r.code ? " codecell" : "") + '">'
+        + (r.code || "\u2014") + '</td>'
+        + '<td class="boat">' + (esc(r.name) || '<span class="klass">unnamed</span>') + '</td>'
+        + '<td class="klass">' + (esc(r.cls) || "\u2014") + '</td>'
+        + '<td class="num">' + (r.py || "\u2014") + '</td>'
+        + (state.lapMode ? '<td class="num">' + (r.laps || "\u2014") + '</td>' : '')
+        + '<td class="num">' + (r.elapsed > 0 ? hms(r.elapsed) : "\u2014") + '</td>'
+        + (state.lapMode ? '<td class="num">\u2014</td>' : '')
+        + '<td class="num">\u2014</td>'
+        + '<td class="num">' + pts(r.points) + '</td>'
+        + '<td class="gapcell"><span class="gaptxt">' + (r.code ? "" : "not scored \u2014 ")
+        + r.reason + '</span></td></tr>';
+    });
+
+    wrap.innerHTML = cards + table + '</tbody></table>';
+
+    Array.prototype.forEach.call(wrap.querySelectorAll("th[data-sort]"), function(th){
+      function go(){
+        var key = th.getAttribute("data-sort");
+        if (state.sortKey === key) state.sortDir = -state.sortDir;
+        else { state.sortKey = key; state.sortDir = 1; }
+        renderSortBar(); renderBoard();
+      }
+      th.addEventListener("click", go);
+      th.addEventListener("keydown", function(ev){
+        if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); go(); }
+      });
+    });
+  }
+
+  function renderPrintHead(){
+    var data = compute();
+    var d = new Date().toLocaleDateString(undefined,{day:"numeric",month:"long",year:"numeric"});
+    document.getElementById("printhead").innerHTML =
+      '<div class="eyebrow">NSC Race Calculator \u2014 Portsmouth Yardstick corrected time</div>'
+      + '<h1 style="font-size:1.9rem;margin:.2em 0 .1em">' + (esc(state.race) || "Race results") + '</h1>'
+      + '<div style="font-family:var(--mono);font-size:.75rem;color:#444;margin-bottom:14px">'
+      + d + ' \u00B7 ' + data.scored.length + ' of ' + data.starters + ' starters scored \u00B7 '
+      + (state.lapMode
+          ? 'lap adj. = elapsed \u00D7 max laps \u00F7 laps (max laps = ' + data.maxLaps
+            + '), corrected = lap adj. \u00D7 1000 \u00F7 PY'
+          : 'corrected = elapsed \u00D7 1000 \u00F7 PY')
+      + '</div>';
+  }
+
+  function render(){
+    renderFormula(); renderFoot(); renderEntries(); renderSortBar(); renderBoard(); renderPrintHead();
+    var rf = document.getElementById("racename");
+    if (rf) rf.value = state.race;
+  }
+
+  function onEdit(ev){
+    var input = ev.target.closest("[data-key]");
+    if (!input) return;
+    var card = input.closest(".entry");
+    var id = +card.getAttribute("data-id");
+    var e = state.entries.filter(function(x){ return x.id === id; })[0];
+    if (!e) return;
+    e[input.getAttribute("data-key")] = input.value;
+    var live = !e.code && (nnum(e.h)*3600 + nnum(e.m)*60 + nnum(e.s)) > 0 && nnum(e.py) > 0;
+    card.classList.toggle("dud", !live);
+    card.classList.toggle("coded", !!e.code);
+    document.getElementById("entrycount").textContent = countText();
+    renderBoard(); renderPrintHead();
+  }
+  document.getElementById("entries").addEventListener("input", onEdit);
+  document.getElementById("entries").addEventListener("change", onEdit);
+
+  document.getElementById("entries").addEventListener("click", function(ev){
+    var b = ev.target.closest("[data-kill]");
+    if (!b) return;
+    var id = +b.getAttribute("data-kill");
+    state.entries = state.entries.filter(function(x){ return x.id !== id; });
+    if (!state.entries.length) state.entries = [blank()];
+    render();
+  });
+
+  document.getElementById("add").addEventListener("click", function(){
+    state.entries.push(blank());
+    renderEntries();
+    var cards = document.querySelectorAll(".entry");
+    var last = cards[cards.length - 1];
+    if (last){
+      last.querySelector("input").focus();
+      last.scrollIntoView({block:"nearest"});
+    }
+  });
+
+  document.getElementById("clear").addEventListener("click", function(){
+    state.race = ""; seed(); render();
+  });
+
+  document.getElementById("lapmode").addEventListener("change", function(ev){
+    state.lapMode = ev.target.checked;
+    if (!state.lapMode && state.sortKey === "laps") state.sortKey = "corrected";
+    render();
+  });
+
+  document.getElementById("sortsel").addEventListener("change", function(ev){
+    state.sortKey = ev.target.value; renderBoard();
+  });
+  document.getElementById("sortdir").addEventListener("click", function(){
+    state.sortDir = -state.sortDir; renderSortBar(); renderBoard();
+  });
+
+  function csvText(){
+    var data = compute();
+    var head = ["Position","Boat","Class","PY"];
+    if (state.lapMode) head.push("Laps");
+    head.push("Elapsed");
+    if (state.lapMode) head.push("Lap-adjusted elapsed");
+    head.push("Corrected","Points","Behind leader");
+    var lines = [head.join(",")];
+    function q(v){ v = String(v); return /[",]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }
+    sortRows(data.scored).forEach(function(r){
+      var row = [(r.tied ? "=" : "") + r.place, r.name, r.cls, r.py];
+      if (state.lapMode) row.push(r.laps);
+      row.push(hms(r.elapsed));
+      if (state.lapMode) row.push(hms(r.ladj));
+      row.push(hms(r.corrected), pts(r.points), gapTxt(r.gap));
+      lines.push(row.map(q).join(","));
+    });
+    data.out.forEach(function(r){
+      var row = [r.code || "", r.name, r.cls, r.py || ""];
+      if (state.lapMode) row.push(r.laps || "");
+      row.push(r.elapsed > 0 ? hms(r.elapsed) : "");
+      if (state.lapMode) row.push("");
+      row.push("", pts(r.points), r.code ? r.reason : "not scored - " + r.reason);
+      lines.push(row.map(q).join(","));
+    });
+    return lines.join("\n");
+  }
+
+  document.getElementById("copy").addEventListener("click", function(){
+    var text = csvText(), btn = this, zone = document.getElementById("copyzone");
+    function fallback(){
+      zone.innerHTML = '<p style="font-size:.8rem;color:var(--slate);margin:0">Select and copy:</p>'
+        + '<textarea class="copybox" readonly></textarea>';
+      var ta = zone.querySelector("textarea");
+      ta.value = text; ta.focus(); ta.select();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        btn.textContent = "Copied";
+        setTimeout(function(){ btn.textContent = "Copy results"; }, 1600);
+        zone.innerHTML = "";
+      }, fallback);
+    } else fallback();
+  });
+
+  document.getElementById("pdf").addEventListener("click", function(){
+    var data = compute();
+    var cols = [{label:"Pos",width:8},{label:"Boat",width:26},{label:"Class",width:18},
+                {label:"PY",width:10,align:"right"}];
+    if (state.lapMode) cols.push({label:"Laps",width:8,align:"right"});
+    cols.push({label:"Elapsed",width:14,align:"right"});
+    if (state.lapMode) cols.push({label:"Lap adj.",width:14,align:"right"});
+    cols.push({label:"Corrected",width:14,align:"right"},{label:"Pts",width:8,align:"right"});
+
+    var rows = [], muted = [];
+    sortRows(data.scored).forEach(function(r){
+      var row = [(r.tied ? "=" : "") + r.place, r.name || "Unnamed", r.cls || "\u2014", r.py];
+      if (state.lapMode) row.push(r.laps);
+      row.push(hms(r.elapsed));
+      if (state.lapMode) row.push(hms(r.ladj));
+      row.push(hms(r.corrected), pts(r.points));
+      rows.push(row);
+    });
+    data.out.forEach(function(r){
+      muted.push(rows.length);
+      var row = [r.code || "\u2014", r.name || "Unnamed", r.cls || "\u2014", r.py || "\u2014"];
+      if (state.lapMode) row.push(r.laps || "\u2014");
+      row.push(r.elapsed > 0 ? hms(r.elapsed) : "\u2014");
+      if (state.lapMode) row.push("\u2014");
+      row.push("\u2014", pts(r.points));
+      rows.push(row);
+    });
+
+    var d = new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+    NSCPDF.save({
+      title: state.race || "Race results",
+      subtitle: "Portsmouth Yardstick corrected time",
+      meta: d + "  \u00B7  " + data.scored.length + " of " + data.starters + " starters scored  \u00B7  "
+        + (state.lapMode
+            ? "lap adj. = elapsed \u00D7 max laps \u00F7 laps sailed (max laps " + data.maxLaps
+              + "), corrected = lap adj. \u00D7 1000 \u00F7 PY"
+            : "corrected = elapsed \u00D7 1000 \u00F7 PY"),
+      columns: cols, rows: rows, muted: muted,
+      footer: "Low-point scoring \u00B7 coded boats score " + data.penalty
+        + " \u00B7 generated by the NSC Race Calculator",
+      filename: (state.race ? state.race.replace(/[^\w\-]+/g,"-").toLowerCase() : "race") + "-results.pdf"
+    }, this);
+  });
+
+  document.getElementById("print").addEventListener("click", function(){
+    renderPrintHead(); window.print();
+  });
+
+  (function(){
+    var head = document.getElementById("board-title").parentNode;
+    var input = document.createElement("input");
+    input.id = "racename";
+    input.className = "racefield noprint";
+    input.placeholder = "Name this race";
+    input.setAttribute("aria-label","Race name");
+    input.addEventListener("input", function(){ state.race = input.value; renderPrintHead(); });
+    head.appendChild(input);
+  })();
+
+  seed();
+  render();
+})();
+</script>
+
+<script>
+/* ---------- pursuit start times ---------- */
+(function(){
+  "use strict";
+  var uid = 0;
+  var P = { name:"", length:"60", gun:"14:00", sortKey:"delay", sortDir:1, entries:[] };
+
+  function nnum(v){ var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function blank(){ return {id:++uid, name:"", cls:"", py:""}; }
+  function seed(){ P.entries = [blank(), blank(), blank()]; }
+  function esc(t){
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];
+    });
+  }
+  function pad(n){ return String(n).padStart(2,"0"); }
+  function delayTxt(sec){
+    sec = Math.round(sec);
+    if (!sec) return "on the gun";
+    var h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+    return "+" + (h ? h + ":" + pad(m) + ":" + pad(s) : m + ":" + pad(s));
+  }
+  function gunSecs(){
+    var bits = String(P.gun || "").split(":");
+    if (bits.length < 2) return null;
+    var h = parseInt(bits[0],10), m = parseInt(bits[1],10);
+    if (!isFinite(h) || !isFinite(m)) return null;
+    return h*3600 + m*60;
+  }
+  function clockAt(offset){
+    var base = gunSecs();
+    if (base === null) return "\u2014";
+    var t = Math.round(base + offset) % 86400;
+    return pad(Math.floor(t/3600)) + ":" + pad(Math.floor((t%3600)/60)) + ":" + pad(t%60);
+  }
+
+  function compute(){
+    var T = nnum(P.length) * 60;
+    var rows = P.entries.map(function(e){
+      return {id:e.id, name:(e.name||"").trim(), cls:(e.cls||"").trim(), py:nnum(e.py)};
+    });
+    var live = rows.filter(function(r){ return r.py > 0; });
+    var slowest = 0;
+    live.forEach(function(r){ if (r.py > slowest) slowest = r.py; });
+
+    live.forEach(function(r){ r.delay = slowest ? T * (1 - r.py/slowest) : 0; });
+    live.sort(function(a,b){ return a.delay - b.delay || a.name.localeCompare(b.name); });
+    live.forEach(function(r,i){
+      r.order = i + 1;
+      r.frac = T > 0 ? r.delay / T : 0;
+    });
+    return {
+      live: live, T: T, slowest: slowest,
+      out: rows.filter(function(r){ return r.py <= 0 && r.name; })
+    };
+  }
+
+  function fld(cls,label,key,val,kind,ph){
+    var extra = kind === "text" ? ' class="text"' : ' inputmode="decimal"';
+    return '<div class="field ' + cls + '"><label>' + label + '</label>'
+      + '<input' + extra + ' data-key="' + key + '" value="' + esc(val) + '" placeholder="'
+      + (ph||"") + '" aria-label="' + label + '"></div>';
+  }
+
+  function renderEntries(){
+    document.getElementById("p-entries").innerHTML = P.entries.map(function(e){
+      return '<div class="entry p' + (nnum(e.py) > 0 ? "" : " dud") + '" data-id="' + e.id + '">'
+        + fld("c-name","Boat","name",e.name,"text","Sail number or name")
+        + fld("c-class","Class","cls",e.cls,"text","Laser")
+        + fld("c-py","PY","py",e.py,"num","1099")
+        + '<div class="c-kill"><button class="kill" data-kill="' + e.id + '">Remove</button></div>'
+        + '</div>';
+    }).join("");
+    var n = P.entries.filter(function(e){ return (e.name||"").trim() || nnum(e.py) > 0; }).length;
+    document.getElementById("p-count").textContent = n + (n === 1 ? " boat" : " boats");
+  }
+
+  var SORTS = [["delay","Start order"],["name","Boat"],["cls","Class"],["py","PY"]];
+  function renderSortBar(){
+    document.getElementById("p-sortsel").innerHTML = SORTS.map(function(o){
+      return '<option value="' + o[0] + '"' + (P.sortKey === o[0] ? " selected" : "") + '>' + o[1] + '</option>';
+    }).join("");
+    document.getElementById("p-sortdir").innerHTML = P.sortDir > 0 ? "&#9650;" : "&#9660;";
+  }
+  function sortRows(rows){
+    var k = P.sortKey, d = P.sortDir, out = rows.slice();
+    out.sort(function(a,b){
+      if (k === "name" || k === "cls"){
+        var x = a[k].toLowerCase(), y = b[k].toLowerCase();
+        return x < y ? -d : x > y ? d : 0;
+      }
+      return (a[k] - b[k]) * d;
+    });
+    return out;
+  }
+
+  function renderBoard(){
+    var data = compute();
+    var wrap = document.getElementById("p-boardwrap");
+    document.getElementById("p-boardcount").textContent =
+      data.live.length ? data.live.length + " starting" : "";
+    document.getElementById("p-sortbar").style.display = data.live.length ? "" : "none";
+
+    var fin = document.getElementById("p-finish");
+    if (data.live.length && data.T > 0 && gunSecs() !== null){
+      fin.style.display = "";
+      fin.textContent = "First gun " + P.gun + " \u00B7 whole fleet due to finish at "
+        + clockAt(data.T).slice(0,5) + " (" + Math.round(data.T/60) + " min race, slowest PY "
+        + data.slowest + ")";
+    } else fin.style.display = "none";
+
+    if (!data.live.length){
+      wrap.innerHTML = '<div class="empty"><p>Add boats with PY numbers to build the start '
+        + 'sequence. The slowest boat starts on the gun.</p>'
+        + '<button class="linkish" id="p-demo">Load a sample fleet</button></div>';
+      document.getElementById("p-demo").addEventListener("click", function(){
+        P.name = "Sample pursuit";
+        P.entries = [
+          {id:++uid, name:"Wayfarer",  cls:"Wayfarer", py:"1102"},
+          {id:++uid, name:"Laser",     cls:"ILCA 7",   py:"1100"},
+          {id:++uid, name:"RS Aero 7", cls:"RS Aero",  py:"1065"},
+          {id:++uid, name:"Fireball",  cls:"Fireball", py:"952"},
+          blank()
+        ];
+        document.getElementById("p-name").value = P.name;
+        render();
+      });
+      return;
+    }
+
+    var rows = sortRows(data.live);
+
+    var cards = '<div class="cards">';
+    rows.forEach(function(r){
+      var meta = ["PY " + r.py];
+      if (r.cls) meta.push(r.cls);
+      cards += '<article class="card' + (r.delay === 0 ? " lead" : "") + '">'
+        + '<div class="cpos">' + r.order + '</div>'
+        + '<div class="cwho"><div class="cboat">' + (esc(r.name) || "Unnamed") + '</div>'
+        + '<div class="cmeta">' + esc(meta.join(" \u00B7 ")) + '</div></div>'
+        + '<div class="ctime"><div class="ccorr">' + clockAt(r.delay).slice(0,5) + '</div>'
+        + '<div class="celap">' + delayTxt(r.delay) + '</div></div>'
+        + '<div class="cgap"><div class="gapbar"><i style="width:'
+        + Math.max(2, Math.round(r.frac*100)) + '%"></i></div></div></article>';
+    });
+    cards += '</div>';
+
+    var table = '<table class="board"><thead><tr>'
+      + '<th data-sort="delay" scope="col" tabindex="0" class="' + (P.sortKey === "delay" ? "on" : "") + '">No.</th>'
+      + '<th data-sort="name" scope="col" tabindex="0" class="' + (P.sortKey === "name" ? "on" : "") + '">Boat</th>'
+      + '<th data-sort="cls" scope="col" tabindex="0" class="' + (P.sortKey === "cls" ? "on" : "") + '">Class</th>'
+      + '<th data-sort="py" scope="col" tabindex="0" style="text-align:right" class="' + (P.sortKey === "py" ? "on" : "") + '">PY</th>'
+      + '<th style="text-align:right">Delay</th><th style="text-align:right">Start time</th>'
+      + '<th class="gapcell">Waiting ashore</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      table += '<tr class="' + (r.delay === 0 ? "lead" : "") + '">'
+        + '<td class="pos">' + r.order + '</td>'
+        + '<td class="boat">' + (esc(r.name) || '<span class="klass">unnamed</span>') + '</td>'
+        + '<td class="klass">' + (esc(r.cls) || "\u2014") + '</td>'
+        + '<td class="num">' + r.py + '</td>'
+        + '<td class="num ladj">' + delayTxt(r.delay) + '</td>'
+        + '<td class="num corr">' + clockAt(r.delay) + '</td>'
+        + '<td class="gapcell"><div class="gapbar"><i style="width:'
+        + Math.max(2, Math.round(r.frac*100)) + '%"></i></div></td></tr>';
+    });
+    data.out.forEach(function(r){
+      table += '<tr class="out"><td class="pos">\u2014</td><td class="boat">' + esc(r.name)
+        + '</td><td class="klass">' + (esc(r.cls) || "\u2014") + '</td>'
+        + '<td class="num">\u2014</td><td class="num">\u2014</td><td class="num">\u2014</td>'
+        + '<td class="gapcell"><span class="gaptxt">no PY number</span></td></tr>';
+    });
+    wrap.innerHTML = cards + table + '</tbody></table>';
+
+    Array.prototype.forEach.call(wrap.querySelectorAll("th[data-sort]"), function(th){
+      function go(){
+        var key = th.getAttribute("data-sort");
+        if (P.sortKey === key) P.sortDir = -P.sortDir;
+        else { P.sortKey = key; P.sortDir = 1; }
+        renderSortBar(); renderBoard();
+      }
+      th.addEventListener("click", go);
+      th.addEventListener("keydown", function(ev){
+        if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); go(); }
+      });
+    });
+  }
+
+  function renderPrintHead(){
+    var data = compute();
+    var d = new Date().toLocaleDateString(undefined,{day:"numeric",month:"long",year:"numeric"});
+    document.getElementById("p-printhead").innerHTML =
+      '<div class="eyebrow">NSC Race Calculator \u2014 pursuit start sequence</div>'
+      + '<h1 style="font-size:1.9rem;margin:.2em 0 .1em">' + (esc(P.name) || "Pursuit race") + '</h1>'
+      + '<div style="font-family:var(--mono);font-size:.75rem;color:#444;margin-bottom:14px">'
+      + d + ' \u00B7 first gun ' + esc(P.gun) + ' \u00B7 ' + Math.round(data.T/60)
+      + ' min race \u00B7 slowest PY ' + data.slowest
+      + ' \u00B7 delay = race length \u00D7 (slowest PY \u2212 PY) \u00F7 slowest PY</div>';
+  }
+
+  function render(){ renderEntries(); renderSortBar(); renderBoard(); renderPrintHead(); }
+
+  document.getElementById("p-entries").addEventListener("input", function(ev){
+    var input = ev.target.closest("input[data-key]");
+    if (!input) return;
+    var card = input.closest(".entry");
+    var e = P.entries.filter(function(x){ return x.id === +card.getAttribute("data-id"); })[0];
+    if (!e) return;
+    e[input.getAttribute("data-key")] = input.value;
+    card.classList.toggle("dud", !(nnum(e.py) > 0));
+    var n = P.entries.filter(function(x){ return (x.name||"").trim() || nnum(x.py) > 0; }).length;
+    document.getElementById("p-count").textContent = n + (n === 1 ? " boat" : " boats");
+    renderBoard(); renderPrintHead();
+  });
+  document.getElementById("p-entries").addEventListener("click", function(ev){
+    var b = ev.target.closest("[data-kill]");
+    if (!b) return;
+    P.entries = P.entries.filter(function(x){ return x.id !== +b.getAttribute("data-kill"); });
+    if (!P.entries.length) P.entries = [blank()];
+    render();
+  });
+  document.getElementById("p-add").addEventListener("click", function(){
+    P.entries.push(blank()); renderEntries();
+    var cards = document.querySelectorAll("#p-entries .entry");
+    var last = cards[cards.length-1];
+    if (last){ last.querySelector("input").focus(); last.scrollIntoView({block:"nearest"}); }
+  });
+  document.getElementById("p-clear").addEventListener("click", function(){
+    P.name = ""; document.getElementById("p-name").value = ""; seed(); render();
+  });
+  document.getElementById("p-length").addEventListener("input", function(ev){
+    P.length = ev.target.value; renderBoard(); renderPrintHead();
+  });
+  document.getElementById("p-gun").addEventListener("input", function(ev){
+    P.gun = ev.target.value; renderBoard(); renderPrintHead();
+  });
+  document.getElementById("p-name").addEventListener("input", function(ev){
+    P.name = ev.target.value; renderPrintHead();
+  });
+  document.getElementById("p-sortsel").addEventListener("change", function(ev){
+    P.sortKey = ev.target.value; renderBoard();
+  });
+  document.getElementById("p-sortdir").addEventListener("click", function(){
+    P.sortDir = -P.sortDir; renderSortBar(); renderBoard();
+  });
+
+  function csvText(){
+    var data = compute();
+    var lines = ["No.,Boat,Class,PY,Delay,Start time"];
+    function q(v){ v = String(v); return /[",]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }
+    sortRows(data.live).forEach(function(r){
+      lines.push([r.order, r.name, r.cls, r.py, delayTxt(r.delay), clockAt(r.delay)].map(q).join(","));
+    });
+    data.out.forEach(function(r){ lines.push(["", r.name, r.cls, "", "", "no PY number"].map(q).join(",")); });
+    return lines.join("\n");
+  }
+  document.getElementById("p-copy").addEventListener("click", function(){
+    var text = csvText(), btn = this, zone = document.getElementById("p-copyzone");
+    function fallback(){
+      zone.innerHTML = '<p style="font-size:.8rem;color:var(--slate);margin:0">Select and copy:</p>'
+        + '<textarea class="copybox" readonly></textarea>';
+      var ta = zone.querySelector("textarea"); ta.value = text; ta.focus(); ta.select();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        btn.textContent = "Copied";
+        setTimeout(function(){ btn.textContent = "Copy sequence"; }, 1600);
+        zone.innerHTML = "";
+      }, fallback);
+    } else fallback();
+  });
+  document.getElementById("p-pdf").addEventListener("click", function(){
+    var data = compute();
+    var rows = [], muted = [];
+    sortRows(data.live).forEach(function(r){
+      rows.push([r.order, r.name || "Unnamed", r.cls || "\u2014", r.py,
+                 delayTxt(r.delay), clockAt(r.delay)]);
+    });
+    data.out.forEach(function(r){
+      muted.push(rows.length);
+      rows.push(["\u2014", r.name || "Unnamed", r.cls || "\u2014", "\u2014", "no PY", "\u2014"]);
+    });
+
+    var d = new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+    NSCPDF.save({
+      title: P.name || "Pursuit race",
+      subtitle: "Pursuit start sequence",
+      meta: d + "  \u00B7  first gun " + P.gun + "  \u00B7  " + Math.round(data.T/60)
+        + " min race  \u00B7  slowest PY " + data.slowest
+        + "  \u00B7  fleet due to finish " + clockAt(data.T).slice(0,5),
+      columns: [{label:"No.",width:8},{label:"Boat",width:30},{label:"Class",width:22},
+                {label:"PY",width:12,align:"right"},{label:"Delay",width:14,align:"right"},
+                {label:"Start time",width:16,align:"right"}],
+      rows: rows, muted: muted,
+      footer: "Delay = race length \u00D7 (slowest PY \u2212 PY) \u00F7 slowest PY"
+        + " \u00B7 generated by the NSC Race Calculator",
+      filename: (P.name ? P.name.replace(/[^\w\-]+/g,"-").toLowerCase() : "pursuit") + "-starts.pdf"
+    }, this);
+  });
+  document.getElementById("p-print").addEventListener("click", function(){
+    renderPrintHead(); window.print();
+  });
+
+  /* ---------- tabs ---------- */
+  var btnC = document.getElementById("tab-btn-c"), btnP = document.getElementById("tab-btn-p");
+  var panC = document.getElementById("tab-corrected"), panP = document.getElementById("tab-pursuit");
+  var plate = document.querySelector(".plate");
+  function show(which){
+    var pursuit = which === "p";
+    panC.hidden = pursuit; panP.hidden = !pursuit;
+    btnC.setAttribute("aria-selected", String(!pursuit));
+    btnP.setAttribute("aria-selected", String(pursuit));
+    if (plate) plate.style.display = pursuit ? "none" : "";
+    window.scrollTo({top:0});
+  }
+  btnC.addEventListener("click", function(){ show("c"); });
+  btnP.addEventListener("click", function(){ show("p"); });
+
+  seed();
+  render();
+})();
+</script>
+</body>
+</html>
