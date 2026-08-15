@@ -11,6 +11,28 @@
 
 const CHECK_INTERVAL = 30 * 60 * 1000; // half an hour is plenty for a race day
 
+/* The prompt is only ever offered on the calm pages. The checklist, start
+   sequence and live race are the OOD's hands-full moments — a bar appearing
+   there is a distraction and a mis-tap at the worst possible time. */
+export const PROMPT_PAGES = new Set(["setup", "signon", "results", "standdown"]);
+
+/* A race in either of these states is under way, so the whole app stays quiet
+   regardless of which page is open. */
+const ACTIVE_RACE_STATUSES = new Set(["sequence", "racing"]);
+
+/**
+ * Whether it is a good moment to offer an update. Pure, so the rule can be
+ * tested directly rather than inferred from the DOM.
+ *
+ * @param {object} state
+ * @param {string|null} state.page current route name
+ * @param {string[]} state.raceStatuses statuses of every race known locally
+ */
+export function canPromptNow({ page, raceStatuses = [] }) {
+  if (!PROMPT_PAGES.has(page)) return false;
+  return !raceStatuses.some((status) => ACTIVE_RACE_STATUSES.has(status));
+}
+
 /**
  * @param {object} opts
  * @param {(apply: () => void) => void} opts.onAvailable called when a new build
@@ -81,24 +103,51 @@ function applyUpdate(registration) {
 }
 
 /**
- * Wire the update bar in the app shell.
- * @returns {(apply: () => void) => void} an onAvailable handler
+ * The update bar in the app shell.
+ *
+ * A waiting build is remembered rather than shown immediately: if it arrives
+ * mid-race the prompt is held back and offered the moment the OOD reaches a
+ * calm page. Nothing is lost by waiting — the new worker sits there either way.
  */
-export function updateBanner(bar) {
-  const refresh = bar.querySelector("#update-refresh");
-  const dismiss = bar.querySelector("#update-dismiss");
+export function createUpdatePrompt(bar) {
+  const refreshButton = bar.querySelector("#update-refresh");
+  const dismissButton = bar.querySelector("#update-dismiss");
 
-  return (apply) => {
-    bar.hidden = false;
-    refresh.addEventListener("click", () => {
-      refresh.disabled = true;
-      refresh.textContent = "Updating…";
-      apply();
-    });
-    // Dismissing only hides it for this session — the new build stays waiting
-    // and will offer itself again next time the app is opened.
-    dismiss.addEventListener("click", () => {
-      bar.hidden = true;
-    });
+  let pendingApply = null;
+  let allowed = false;
+  let dismissed = false;
+
+  function render() {
+    bar.hidden = !(pendingApply && allowed && !dismissed);
+  }
+
+  refreshButton.addEventListener("click", () => {
+    if (!pendingApply) return;
+    refreshButton.disabled = true;
+    refreshButton.textContent = "Updating…";
+    pendingApply();
+  });
+
+  // Dismissing only hides it for this session — the new build stays waiting
+  // and offers itself again next time the app is opened.
+  dismissButton.addEventListener("click", () => {
+    dismissed = true;
+    render();
+  });
+
+  return {
+    /** Pass to startUpdateWatch as onAvailable. */
+    onAvailable(apply) {
+      pendingApply = apply;
+      render();
+    },
+    /** Called whenever the page or the race state changes. */
+    setAllowed(next) {
+      allowed = next;
+      render();
+    },
+    get visible() {
+      return !bar.hidden;
+    },
   };
 }

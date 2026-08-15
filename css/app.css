@@ -4,24 +4,31 @@
    the layout is mobile-only (design at 390px) and touch targets are 44px+. */
 
 /* ---- fonts: self-hosted latin subsets, so the app renders identically with
-   no signal on the beach. Google Fonts is never contacted at runtime. ---- */
+   no signal on the beach. Google Fonts is never contacted at runtime.
+
+   Body and numeric text are Atkinson Hyperlegible — designed by the Braille
+   Institute to keep letterforms distinguishable in poor conditions, which is
+   the whole problem with reading a phone in sun glare with wet hands. The
+   "Next" and "Mono" cuts are used rather than the original because the design
+   leans on 500 and 600 weights; the original ships only 400 and 700.
+   Barlow Condensed stays for display, matching the club's calculator. ---- */
 @font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/barlow-condensed-500.woff2") format("woff2")}
 @font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/barlow-condensed-600.woff2") format("woff2")}
 @font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:700;font-display:swap;src:url("../fonts/barlow-condensed-700.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url("../fonts/ibm-plex-sans-400.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/ibm-plex-sans-500.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/ibm-plex-sans-600.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("../fonts/ibm-plex-mono-400.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/ibm-plex-mono-500.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/ibm-plex-mono-600.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:400;font-display:swap;src:url("../fonts/atkinson-next-400.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/atkinson-next-500.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/atkinson-next-600.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Mono";font-style:normal;font-weight:400;font-display:swap;src:url("../fonts/atkinson-mono-400.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Mono";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/atkinson-mono-500.woff2") format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Mono";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/atkinson-mono-600.woff2") format("woff2")}
 
 :root{
   --mist:#F2F5FA; --chalk:#FFFFFF; --ink:#0A1B3D; --hull:#1B3B76;
   --slate:#5F6E8C; --line:#D2DAE8; --flag:#C8102E;
   --go:#0E7A4A;
   --disp:"Barlow Condensed","Arial Narrow",sans-serif;
-  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --body:"Atkinson Hyperlegible Next",system-ui,-apple-system,sans-serif;
+  --mono:"Atkinson Hyperlegible Mono",ui-monospace,Menlo,monospace;
   --safe-t:env(safe-area-inset-top,0px);
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);
@@ -37,6 +44,15 @@ body{
   padding-bottom:calc(24px + var(--safe-b));
 }
 .wrap{max-width:520px;margin:0 auto;padding:0 14px 40px}
+
+/* ---- tabular figures for anything that counts.
+   A race clock whose digits change width jitters on every tick, and a results
+   column whose numbers don't line up can't be read down at a glance. Applied
+   to every numeric context rather than to body text, where proportional
+   figures still read better. ---- */
+.num,.count,.cpos,.pos,.ccorr,.celap,.cmeta,.cgap,.gaptxt,
+.sync-pill,.resume .detail,.stub,.dev-log,.dev-row output,
+.field input,.field select{font-variant-numeric:tabular-nums}
 
 /* ---- mast: pinned so the sync indicator is never scrolled away ---- */
 .topbar{position:sticky;top:0;z-index:20}
@@ -174,7 +190,7 @@ button.btn[disabled]{opacity:.45;cursor:default}
 .cboat{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cmeta{font-family:var(--mono);font-size:.68rem;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ctime{grid-area:time;text-align:right}
-.ccorr{font-family:var(--mono);font-weight:600;font-size:1rem;font-variant-numeric:tabular-nums}
+.ccorr{font-family:var(--mono);font-weight:600;font-size:1rem}
 .celap{font-family:var(--mono);font-size:.68rem;color:var(--slate)}
 .cgap{grid-area:gap;margin-top:2px}
 .card.out{opacity:.62}
@@ -182,7 +198,7 @@ button.btn[disabled]{opacity:.45;cursor:default}
 .gapbar{height:8px;background:#E6EBF4;border-radius:1px;overflow:hidden}
 .gapbar i{display:block;height:100%;background:var(--hull);border-radius:1px}
 .lead .gapbar i{background:var(--flag)}
-.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.num{font-family:var(--mono);white-space:nowrap}
 
 /* ---- empty / placeholder states ---- */
 .empty{padding:30px 16px;text-align:center;color:var(--slate)}

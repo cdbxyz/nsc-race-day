@@ -5,7 +5,7 @@
  * plain objects: { title, mount(el), unmount() }.
  */
 
-export function createRouter(routes, { fallback = "setup" } = {}) {
+export function createRouter(routes, { fallback = "setup", onChange = null } = {}) {
   let currentName = null;
 
   function nameFromHash() {
@@ -39,6 +39,12 @@ export function createRouter(routes, { fallback = "setup" } = {}) {
       entering.page.mount?.(entering.section);
     } catch (err) {
       console.error(`mount ${name} failed`, err);
+    }
+
+    try {
+      onChange?.(name);
+    } catch (err) {
+      console.error("router onChange failed", err);
     }
   }
 

@@ -9,7 +9,7 @@ import * as db from "./db.js";
 import { sync } from "./sync.js";
 import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
-import { startUpdateWatch, updateBanner } from "./update.js";
+import { startUpdateWatch, createUpdatePrompt, canPromptNow } from "./update.js";
 
 import setup from "./pages/setup.js";
 import signon from "./pages/signon.js";
@@ -23,6 +23,7 @@ import dev from "./pages/dev.js";
 const PAGES = { setup, signon, checklist, sequence, live, results, standdown, dev };
 
 let router;
+let updatePrompt;
 
 async function boot() {
   await db.openDB();
@@ -30,18 +31,40 @@ async function boot() {
   wireSyncIndicator();
   sync.start();
 
+  updatePrompt = createUpdatePrompt(document.getElementById("update-bar"));
+
   const routes = {};
   for (const [name, page] of Object.entries(PAGES)) {
     const section = document.getElementById(`page-${name}`);
     if (!section) throw new Error(`no section for page "${name}"`);
     routes[name] = { section, page };
   }
-  router = createRouter(routes, { fallback: "setup" });
+  router = createRouter(routes, { fallback: "setup", onChange: refreshUpdateAllowed });
   router.start();
+
+  // Race state changes are writes, so this catches a race starting or
+  // finishing as well as the OOD moving between pages.
+  db.onWrite(refreshUpdateAllowed);
+  await refreshUpdateAllowed();
 
   await showResumeBanner();
 
-  startUpdateWatch({ onAvailable: updateBanner(document.getElementById("update-bar")) });
+  startUpdateWatch({ onAvailable: updatePrompt.onAvailable });
+}
+
+/** Decide whether now is a calm enough moment to offer a new build. */
+async function refreshUpdateAllowed() {
+  if (!updatePrompt) return;
+  try {
+    const races = await db.getAll("races");
+    updatePrompt.setAllowed(
+      canPromptNow({ page: router?.current, raceStatuses: races.map((r) => r.status) })
+    );
+  } catch (err) {
+    // If we can't tell what's happening, say nothing rather than interrupt.
+    console.error("could not evaluate update prompt state", err);
+    updatePrompt.setAllowed(false);
+  }
 }
 
 function wireSyncIndicator() {

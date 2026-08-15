@@ -26,7 +26,23 @@ export default {
       failOut.textContent = `${failRate.value}%`;
     });
 
-    section.querySelector("#dev-write").addEventListener("click", writeTestEvent);
+    const raceStatus = section.querySelector("#dev-race-status");
+    raceStatus.addEventListener("change", async () => {
+      const race = await latestRace();
+      if (!race) {
+        alert("Write a test event first — there is no race to move.");
+        return;
+      }
+      // Status changes go through localWrite like everything else, which is
+      // also what re-evaluates whether the update prompt may show.
+      await db.localWrite("races", { ...race, status: raceStatus.value });
+      render();
+    });
+
+    section.querySelector("#dev-write").addEventListener("click", async () => {
+      await writeTestEvent();
+      render();
+    });
     section.querySelector("#dev-flush").addEventListener("click", () => sync.flush());
     section.querySelector("#dev-clear").addEventListener("click", async () => {
       if (!confirm("Delete all local race data? This cannot be undone.")) return;
@@ -38,7 +54,10 @@ export default {
     async function render() {
       const outbox = await db.peekOutbox(50);
       const { consecutiveFailures, lastDelay, backend } = sync.stats();
+      const race = await latestRace();
+      raceStatus.value = race ? race.status : "";
       const lines = [
+        `race         ${race ? `${race.number} — ${race.status}` : "none"}`,
         `backend      ${backend} (${Math.round(fakeBackend.failureRate * 100)}% failure)`,
         `status       ${sync.status.state}`,
         `pending      ${sync.status.pending}`,
@@ -69,6 +88,14 @@ export default {
     stopWatching = null;
   },
 };
+
+/** The most recent race of the open day, if there is one. */
+async function latestRace() {
+  const days = await db.getAllByIndex("race_days", "by_status", "open");
+  if (!days.length) return null;
+  const races = await db.getAllByIndex("races", "by_race_day", days[0].id);
+  return races.length ? races[races.length - 1] : null;
+}
 
 /**
  * Seed an open race day, one race and one event — enough to prove writes

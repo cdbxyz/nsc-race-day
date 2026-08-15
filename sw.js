@@ -10,19 +10,19 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "422908043d90";
+const VERSION = "ac48b8034bbd";
 const SHELL = [
   "./",
   "./css/app.css",
+  "./fonts/atkinson-mono-400.woff2",
+  "./fonts/atkinson-mono-500.woff2",
+  "./fonts/atkinson-mono-600.woff2",
+  "./fonts/atkinson-next-400.woff2",
+  "./fonts/atkinson-next-500.woff2",
+  "./fonts/atkinson-next-600.woff2",
   "./fonts/barlow-condensed-500.woff2",
   "./fonts/barlow-condensed-600.woff2",
   "./fonts/barlow-condensed-700.woff2",
-  "./fonts/ibm-plex-mono-400.woff2",
-  "./fonts/ibm-plex-mono-500.woff2",
-  "./fonts/ibm-plex-mono-600.woff2",
-  "./fonts/ibm-plex-sans-400.woff2",
-  "./fonts/ibm-plex-sans-500.woff2",
-  "./fonts/ibm-plex-sans-600.woff2",
   "./icon.svg",
   "./index.html",
   "./js/app.js",

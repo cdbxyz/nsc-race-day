@@ -138,6 +138,29 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head"><span class="panel-title">Race state</span></div>
+      <div class="panel-body">
+        <div class="field">
+          <label for="dev-race-status">Latest race status</label>
+          <select id="dev-race-status">
+            <option value="">— no race yet —</option>
+            <option value="setup">setup</option>
+            <option value="prestart">prestart</option>
+            <option value="sequence">sequence</option>
+            <option value="racing">racing</option>
+            <option value="finished">finished</option>
+            <option value="published">published</option>
+            <option value="abandoned">abandoned</option>
+          </select>
+        </div>
+        <p class="stub" style="padding:8px 0 0">
+          The update prompt stays hidden while a race is in
+          <code>sequence</code> or <code>racing</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><span class="panel-title">Fake backend</span></div>
       <div class="panel-body">
         <div class="dev-row">
