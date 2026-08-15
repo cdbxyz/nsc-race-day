@@ -16,7 +16,9 @@ import {
   raceState,
   raceClock,
   formatElapsed,
+  formatSplits,
   formatClockTime,
+  plannedLaps,
   liveEvents,
   lastUndoable,
 } from "./../state.js";
@@ -166,6 +168,7 @@ function finishedRail(state) {
       el("span.railpos", { text: position ?? boat.code }),
       el("span.railboat", { text: name }),
       el("span.railtime", { text: boat.code ? "" : formatElapsed(boat.elapsedMs) }),
+      boat.splits.length ? el("span.railsplits", { text: formatSplits(boat.splits) }) : null,
     ]);
   };
 
@@ -201,11 +204,8 @@ function boatCard(boat) {
   const boatRow = context.boatById.get(boat.entry.boat_id);
   const helm = context.helmById.get(boat.entry.helm_id);
 
-  const meta = [
-    helm?.name ?? "",
-    `Lap ${boat.onLap} of ${boat.lapsPlanned}`,
-    boat.lastLapAt ? `last ${formatClockTime(boat.lastLapAt)}` : null,
-  ]
+  const splits = formatSplits(boat.splits);
+  const meta = [helm?.name ?? "", `Lap ${boat.onLap} of ${boat.lapsPlanned}`]
     .filter(Boolean)
     .join(" · ");
 
@@ -214,6 +214,7 @@ function boatCard(boat) {
     el("div.boatinfo", {}, [
       el("div.boatname", { text: boatRow?.name ?? "unknown" }),
       el("div.boatmeta", { text: meta }),
+      splits ? el("div.boatsplits", { text: splits }) : null,
     ]),
     el(`button.lapbtn${isFinish ? ".finish" : ""}`, {
       type: "button",
@@ -456,7 +457,7 @@ function shortenSheet(state) {
 
   // Second step: say plainly what it will do to the boats still out there.
   const affected = state.racing.filter((boat) => {
-    const planned = boat.entry.laps_override ?? (boat.entry.fleet === "fast" ? raceSheet.fast : raceSheet.slow);
+    const planned = plannedLaps(boat.entry, { fast: raceSheet.fast, slow: raceSheet.slow });
     return boat.lapsDone >= planned - 1;
   });
 

@@ -46,6 +46,23 @@ export async function openRaceDay() {
   return open[0];
 }
 
+/**
+ * The most recent race day, open or closed. Results stay readable after
+ * stand-down: someone always wants the PDF again on Monday.
+ */
+export async function latestRaceDay() {
+  const open = await openRaceDay();
+  if (open) return open;
+  const days = await db.getAll("race_days");
+  if (!days.length) return null;
+  days.sort(
+    (a, b) =>
+      String(b.date || "").localeCompare(String(a.date || "")) ||
+      String(b.created_at || "").localeCompare(String(a.created_at || ""))
+  );
+  return days[0];
+}
+
 /** Names used on previous race days, most recent first — for suggestions. */
 export async function recentOfficerNames() {
   const days = await db.getAll("race_days");

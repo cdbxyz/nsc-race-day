@@ -7,6 +7,7 @@
  */
 
 import * as db from "./../db.js";
+import { el, flash, armedButton } from "./../ui.js";
 import { sync, fakeBackend } from "./../sync.js";
 import * as api from "./../supabase.js";
 import { supabaseBackend, pullReferenceData, lastRefreshedAt } from "./../backend.js";
@@ -46,9 +47,9 @@ export default {
     section.querySelector("#dev-pull").addEventListener("click", async () => {
       try {
         const { counts } = await pullReferenceData();
-        alert(`Refreshed: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+        flash(section, `Refreshed: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
       } catch (err) {
-        alert(`Refresh failed: ${err.message}`);
+        flash(section, `Refresh failed: ${err.message}`, "error");
       }
       render();
     });
@@ -57,7 +58,7 @@ export default {
     raceStatus.addEventListener("change", async () => {
       const race = await latestRace();
       if (!race) {
-        alert("Write a test event first — there is no race to move.");
+        flash(section, "Write a test event first — there is no race to move.", "error");
         return;
       }
       // Status changes go through localWrite like everything else, which is
@@ -76,12 +77,20 @@ export default {
       await sync.flush();
       render();
     });
-    section.querySelector("#dev-clear").addEventListener("click", async () => {
-      if (!confirm("Delete all local race data? This cannot be undone.")) return;
-      await db.clearAll();
-      await sync.refreshStatus();
-      render();
-    });
+    // Replaced with a tap-to-arm button, keeping the id so a second mount
+    // still finds something to replace.
+    const replacement = armedButton(
+      "Clear all local data",
+      "Tap again to delete everything",
+      "danger",
+      async () => {
+        await db.clearAll();
+        await sync.refreshStatus();
+        render();
+      }
+    );
+    replacement.id = "dev-clear";
+    section.querySelector("#dev-clear").replaceWith(replacement);
 
     async function render() {
       const outbox = await db.allOutbox();

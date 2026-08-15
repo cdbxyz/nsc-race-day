@@ -11,6 +11,8 @@
  */
 
 /** A start sequence is ten minutes from the tap to the gun. */
+import { lapsFor } from "./handicap.js";
+
 export const SEQUENCE_MS = 10 * 60 * 1000;
 
 /* The flag states the OOD is working to. Seconds remaining, descending. */
@@ -163,11 +165,21 @@ export function lapPlan(race, events = []) {
   return plan;
 }
 
+/**
+ * How many laps this entry is due: its own override if it has one, otherwise
+ * its fleet's count from the current plan.
+ *
+ * Delegates to handicap.js rather than repeating the rule. It was written out
+ * longhand in three places — here, raceday.entryLaps and the shorten sheet —
+ * which is three chances for them to disagree about what a slow boat sails.
+ */
 export function plannedLaps(entry, plan) {
-  if (entry?.laps_override != null && entry.laps_override !== "") {
-    return Number(entry.laps_override);
-  }
-  return entry?.fleet === "fast" ? plan.fast : plan.slow;
+  return lapsFor({
+    fleet: entry?.fleet,
+    lapsOverride: entry?.laps_override,
+    fastLaps: plan?.fast,
+    slowLaps: plan?.slow,
+  });
 }
 
 /* ---------------------------------------------------------------------------
@@ -198,10 +210,24 @@ export function boatState(entry, events, { plan, startAt = null }) {
   const finishedAt = finish ? ms(finish.occurred_at) : null;
   const lastEvent = [...laps, ...(finish ? [finish] : [])].sort(byTime).pop() ?? null;
 
+  /* Each crossing as elapsed race time, in order. Display only — the events
+     themselves keep their absolute occurred_at, which is what the results
+     maths and the audit log depend on. */
+  const splits = [
+    ...laps.map((event, index) => ({
+      label: `L${index + 1}`,
+      ms: startAt == null ? null : ms(event.occurred_at) - startAt,
+    })),
+    ...(finish
+      ? [{ label: "F", ms: startAt == null ? null : ms(finish.occurred_at) - startAt }]
+      : []),
+  ];
+
   const boat = {
     entryId: entry.id,
     lapsDone,
     lapsPlanned,
+    splits,
     // "lap 2 of 3" — the lap being sailed now, never beyond the plan.
     onLap: Math.min(lapsDone + (finish ? 0 : 1), Math.max(lapsPlanned, lapsDone)),
     lastLapAt: lastEvent ? ms(lastEvent.occurred_at) : null,
@@ -254,6 +280,64 @@ export function raceState({ race, entries = [], events = [] }) {
   };
 }
 
+/* ---------------------------------------------------------------------------
+ * Results
+ *
+ * The event log gives laps, elapsed time and codes; scoring.js turns those
+ * plain numbers into positions. A `correction` event may override any of them
+ * before publishing, and the payload shape below is the contract that
+ * 003_views.sql relies on to compute the same answers in Postgres:
+ *
+ *   {"laps": <int>, "elapsed_seconds": <numeric>, "code": "<RRS code>"}
+ *
+ * Any subset may be present; absent keys leave the computed value alone.
+ * ------------------------------------------------------------------------ */
+
+/** The latest live correction for an entry, or null. */
+export function correctionFor(entryId, events = []) {
+  const corrections = liveEvents(events).filter(
+    (e) => e.type === "correction" && e.entry_id === entryId
+  );
+  return corrections.length ? (corrections[corrections.length - 1].payload ?? {}) : null;
+}
+
+/**
+ * Turn the log into the plain numbers scoring.js takes.
+ *
+ * @returns {Array<{id, entry, personalPy, basePy, factor, elapsedSeconds,
+ *                  laps, code, corrected: boolean}>}
+ */
+export function resultInputs({ race, entries = [], events = [] }) {
+  const plan = lapPlan(race, events);
+  const startAt = ms(race?.start_at) ?? sequenceState(events).startAt ?? null;
+
+  return entries.map((entry) => {
+    const boat = boatState(entry, events, { plan, startAt });
+    const fix = correctionFor(entry.id, events);
+
+    const laps = fix?.laps != null ? Number(fix.laps) : boat.lapsDone;
+    const elapsedSeconds =
+      fix?.elapsed_seconds != null
+        ? Number(fix.elapsed_seconds)
+        : boat.elapsedMs != null
+          ? boat.elapsedMs / 1000
+          : 0;
+    const code = fix?.code !== undefined ? fix.code : boat.code;
+
+    return {
+      id: entry.id,
+      entry,
+      personalPy: Number(entry.personal_py),
+      basePy: entry.base_py == null ? null : Number(entry.base_py),
+      factor: entry.handicap_factor == null ? null : Number(entry.handicap_factor),
+      elapsedSeconds,
+      laps,
+      code: code || "",
+      corrected: Boolean(fix),
+    };
+  });
+}
+
 /** Elapsed race time, for the pinned clock. */
 export function raceClock(startAt, now) {
   if (startAt == null) return null;
@@ -261,15 +345,33 @@ export function raceClock(startAt, now) {
   return formatElapsed(elapsed);
 }
 
+/**
+ * M:SS under an hour, H:MM:SS over — the units the race clock uses, so a lap
+ * split sitting next to it reads without explanation.
+ */
 export function formatElapsed(elapsedMs) {
   if (elapsedMs == null) return "—";
-  const total = Math.floor(elapsedMs / 1000);
+  const total = Math.max(0, Math.floor(elapsedMs / 1000));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
-  const mm = String(minutes).padStart(2, "0");
   const ss = String(seconds).padStart(2, "0");
-  return hours ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${ss}` : `${minutes}:${ss}`;
+}
+
+/**
+ * "L1 4:12 · L2 8:23 · F 12:41".
+ *
+ * Must stay on one row: the live page fits about eight cards on a 390px
+ * screen and a wrapped line costs one of them. Three laps and a finish fit
+ * comfortably; anything longer drops the earliest splits, because the recent
+ * ones are what the OOD is watching.
+ */
+export function formatSplits(splits = [], { maxItems = 4 } = {}) {
+  if (!splits.length) return "";
+  const shown = splits.slice(-maxItems);
+  const text = shown.map((s) => `${s.label} ${formatElapsed(s.ms)}`).join(" · ");
+  return shown.length < splits.length ? `… ${text}` : text;
 }
 
 /** Wall-clock time of day, for "last lap 14:32". */

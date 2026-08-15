@@ -513,3 +513,30 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 .foot a:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---- results and stand-down ---- */
+.card{position:relative}
+.correctbtn{min-width:0;padding:0 10px;min-height:38px;font-size:.68rem;grid-column:1 / -1;justify-self:end}
+.correctedmark{
+  display:inline-block;font-family:var(--disp);text-transform:uppercase;
+  letter-spacing:.1em;font-size:.62rem;font-weight:600;color:var(--flag);
+  border:1px solid var(--flag);border-radius:2px;padding:1px 5px;margin-top:3px;
+}
+.tallymark{
+  flex:none;font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
+  font-size:.72rem;font-weight:600;color:var(--slate);
+}
+.regrow.tally-finished{border-left:3px solid var(--go)}
+.regrow.tally-coded{border-left:3px solid var(--slate)}
+.regrow.tally-abandoned{border-left:3px solid var(--line)}
+.regrow.tally-unaccounted{border-left:3px solid var(--flag);background:#FDF2F4}
+.regrow.tally-unaccounted .tallymark{color:var(--flag)}
+.regrow.tally-unaccounted .regname{font-weight:700}
+
+/* Lap splits: one row, never two — a wrapped line costs a boat card. */
+.boatsplits,.railsplits{
+  font-family:var(--mono);font-size:.66rem;color:var(--hull);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+}
+.railsplits{color:var(--slate);font-size:.62rem}

@@ -41,3 +41,9 @@ Hard rules:
   - CLAUDE.md is living documentation. Any session that changes a
   convention this file describes (fonts, tooling, workflows, naming)
   must update the relevant rule in the same commit.
+
+  - Any new race_events.type or races.status value must ship with a
+  migration updating the corresponding CHECK constraint in the same
+  commit — the server refuses unknown values and the row quarantines.
+- Never use native blocking dialogs (alert/confirm/prompt). Inline
+  sheets and tap-to-arm patterns only.

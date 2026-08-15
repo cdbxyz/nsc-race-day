@@ -8,7 +8,7 @@
  * Nothing here is recomputed later, so a published result never shifts.
  */
 
-import { el, clear, field, selectField, panel, notice } from "./../ui.js";
+import { el, clear, field, selectField, panel, notice, armedButton } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as reg from "./../registers.js";
@@ -569,16 +569,16 @@ function entryEditor(data, entry, wins) {
      sign-on list is the tally record, and a boat that was there must stay
      visible. Codes are how a boat stops racing after that. */
   if (rd.canRemoveEntries(data.race)) {
-    const remove = el("button.btn.danger", {
-      type: "button",
-      text: "Remove from sign-on",
-      onclick: async () => {
-        const boat = data.boatById.get(entry.boat_id);
-        if (!confirm(`Take ${boat?.name ?? "this boat"} off the sign-on list?`)) return;
+    const boat = data.boatById.get(entry.boat_id);
+    const remove = armedButton(
+      "Remove from sign-on",
+      `Tap again to remove ${boat?.name ?? "this boat"}`,
+      "danger",
+      async () => {
         await rd.removeEntry(entry.id, data.race);
         await render();
-      },
-    });
+      }
+    );
     wrap.append(el("div.actions", {}, [remove]));
   } else {
     wrap.append(

@@ -24,6 +24,7 @@ import {
   nextAction,
   raceState,
   formatElapsed,
+  formatSplits,
 } from "../js/state.js";
 
 const RACE = { id: "r1", fast_laps: 3, slow_laps: 2, start_at: null };
@@ -416,4 +417,137 @@ test("nextAction is null once a boat is done, whatever the plan says", () => {
 
 test("MARKS are the four flag states, in order", () => {
   assert.deepEqual(MARKS.map((m) => m.short), ["10:00", "5:00", "1:00", "0:00"]);
+});
+
+/* ---------------------------------------------------------------------------
+ * Planned laps per entry
+ *
+ * The rule — override, else the fleet's count from the current plan — decides
+ * the "of n" text, which lap the button offers, and when it becomes FINISH.
+ * It must be one rule, resolved per entry, not per race.
+ * ------------------------------------------------------------------------ */
+
+test("a fast boat gets the fast count and a slow boat the slow one", () => {
+  const plan = { fast: 3, slow: 2 };
+  assert.equal(plannedLaps(entry("f", "fast"), plan), 3);
+  assert.equal(plannedLaps(entry("s", "slow"), plan), 2);
+});
+
+test("a per-boat override beats both fleet counts", () => {
+  const plan = { fast: 3, slow: 2 };
+  assert.equal(plannedLaps(entry("f", "fast", 1), plan), 1);
+  assert.equal(plannedLaps(entry("s", "slow", 4), plan), 4);
+});
+
+test("a mixed fleet resolves each card independently", () => {
+  // The reported bug: every card reading "of 3" regardless of fleet.
+  const entries = [entry("fast1", "fast"), entry("slow1", "slow"), entry("over1", "fast", 1)];
+  const state = raceState({ race: RACE, entries, events: [] });
+
+  assert.deepEqual(
+    state.boats.map((b) => [b.entryId, b.lapsPlanned, b.onLap, b.action]),
+    [
+      ["fast1", 3, 1, "lap"],
+      ["slow1", 2, 1, "lap"],
+      ["over1", 1, 1, "finish"],
+    ]
+  );
+});
+
+test("a slow boat's button says Finish on its second lap, and it cannot be given a third", () => {
+  const events = [ev("lap_recorded", { entry_id: "s1", occurred_at: at(10) })];
+  const boat = boatState(entry("s1", "slow"), events, { plan: { fast: 3, slow: 2 } });
+
+  assert.equal(boat.lapsPlanned, 2);
+  assert.equal(boat.onLap, 2, "on its last lap");
+  assert.equal(boat.action, "finish", "the next tap finishes it, it cannot take a third lap");
+});
+
+test("shortening 3/2 to 2/1 re-resolves per fleet", () => {
+  const events = [ev("course_shortened", { payload: { fast_laps: 2, slow_laps: 1 } })];
+  const plan = lapPlan(RACE, events);
+
+  const fastFresh = boatState(entry("f", "fast"), events, { plan });
+  assert.equal(fastFresh.lapsPlanned, 2);
+  assert.equal(fastFresh.action, "lap", "one more lap, then the finish");
+
+  const fastOne = boatState(
+    entry("f2", "fast"),
+    [...events, ev("lap_recorded", { entry_id: "f2", occurred_at: at(30) })],
+    { plan }
+  );
+  assert.equal(fastOne.action, "finish", "fast boats finish on lap 2");
+
+  const slowFresh = boatState(entry("s", "slow"), events, { plan });
+  assert.equal(slowFresh.lapsPlanned, 1);
+  assert.equal(slowFresh.action, "finish", "slow boats finish on lap 1");
+});
+
+/* ---------------------------------------------------------------------------
+ * Lap splits
+ *
+ * Display only: the events keep their absolute occurred_at, and these are
+ * derived by subtracting the gun time at render.
+ * ------------------------------------------------------------------------ */
+
+test("each crossing is shown as elapsed race time, cumulative", () => {
+  const events = [
+    ev("lap_recorded", { entry_id: "en1", occurred_at: at(252) }),
+    ev("lap_recorded", { entry_id: "en1", occurred_at: at(503) }),
+  ];
+  const boat = boatState(entry("en1"), events, { plan: PLAN, startAt: T0 });
+
+  assert.deepEqual(boat.splits.map((s) => s.label), ["L1", "L2"]);
+  assert.equal(formatSplits(boat.splits), "L1 4:12 · L2 8:23");
+});
+
+test("finishing appends F to the line", () => {
+  const events = [
+    ev("lap_recorded", { entry_id: "en1", occurred_at: at(252) }),
+    ev("lap_recorded", { entry_id: "en1", occurred_at: at(503) }),
+    ev("boat_finished", { entry_id: "en1", occurred_at: at(761) }),
+  ];
+  const boat = boatState(entry("en1"), events, { plan: PLAN, startAt: T0 });
+  assert.equal(formatSplits(boat.splits), "L1 4:12 · L2 8:23 · F 12:41");
+});
+
+test("an undone lap disappears from the line", () => {
+  const good = ev("lap_recorded", { id: "l1", entry_id: "en1", occurred_at: at(252) });
+  const oops = ev("lap_recorded", { id: "l2", entry_id: "en1", occurred_at: at(300) });
+
+  const before = boatState(entry("en1"), [good, oops], { plan: PLAN, startAt: T0 });
+  assert.equal(formatSplits(before.splits), "L1 4:12 · L2 5:00");
+
+  const after = boatState(entry("en1"), [good, oops, undo("l2")], { plan: PLAN, startAt: T0 });
+  assert.equal(formatSplits(after.splits), "L1 4:12", "and the numbering closes up");
+});
+
+test("splits cross the hour boundary into H:MM:SS", () => {
+  const events = [
+    ev("lap_recorded", { entry_id: "en1", occurred_at: at(3599) }),
+    ev("lap_recorded", { entry_id: "en1", occurred_at: at(3600) }),
+    ev("boat_finished", { entry_id: "en1", occurred_at: at(3852) }),
+  ];
+  const boat = boatState(entry("en1"), events, { plan: PLAN, startAt: T0 });
+  assert.equal(formatSplits(boat.splits), "L1 59:59 · L2 1:00:00 · F 1:04:12");
+});
+
+test("the line stays on one row by dropping the earliest splits", () => {
+  const splits = [1, 2, 3, 4, 5].map((n) => ({ label: `L${n}`, ms: n * 1000 }));
+  const text = formatSplits(splits);
+  assert.ok(text.startsWith("… "), "truncated from the left");
+  assert.ok(!text.includes("L1 "), "the oldest goes first");
+  assert.ok(text.includes("L5"), "the most recent stays");
+});
+
+test("a boat with no crossings has an empty line rather than a stray separator", () => {
+  const boat = boatState(entry("en1"), [], { plan: PLAN, startAt: T0 });
+  assert.deepEqual(boat.splits, []);
+  assert.equal(formatSplits(boat.splits), "");
+});
+
+test("elapsed formatting matches the race clock's units", () => {
+  assert.equal(formatElapsed(252_000), "4:12");
+  assert.equal(formatElapsed(3_852_000), "1:04:12");
+  assert.equal(formatElapsed(26_000), "0:26");
 });

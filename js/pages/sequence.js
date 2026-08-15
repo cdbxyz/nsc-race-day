@@ -8,7 +8,7 @@
  * Visual only. The horn is the real signal; this is the thing beside it.
  */
 
-import { el, clear, panel, notice, field } from "./../ui.js";
+import { el, clear, panel, notice, field, armedButton } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -169,40 +169,6 @@ function countdownPanel(race, clock, sequence) {
   ]);
 
   return el("div", {}, [wrap, controls]);
-}
-
-/**
- * A button that needs two taps, without a dialog. The first arms it and says
- * so; the second acts. It disarms itself after a few seconds so a stray tap
- * never leaves a live control primed.
- */
-function armedButton(label, armedLabel, tone, action) {
-  let armed = false;
-  let timer = null;
-
-  const button = el(`button.btn.${tone}`, {
-    type: "button",
-    text: label,
-    onclick: async () => {
-      if (!armed) {
-        armed = true;
-        button.textContent = armedLabel;
-        button.classList.add("armed");
-        navigator.vibrate?.(20);
-        timer = setTimeout(() => {
-          armed = false;
-          button.textContent = label;
-          button.classList.remove("armed");
-        }, 4000);
-        return;
-      }
-      clearTimeout(timer);
-      button.disabled = true;
-      await action();
-    },
-  });
-
-  return button;
 }
 
 /** At zero: record the gun and hand over to the live race page. */

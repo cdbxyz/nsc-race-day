@@ -84,3 +84,49 @@ export function notice(message, tone = "info") {
 export function datalist(id, values) {
   return el("datalist", { id }, values.map((v) => el("option", { value: v })));
 }
+
+/**
+ * A button that needs two taps instead of a blocking confirm.
+ *
+ * Native alert/confirm/prompt are banned in this app: they freeze the page,
+ * are miserable on a phone, and cannot show what the action would actually do.
+ * The first tap arms the button and says so; the second acts. It disarms
+ * itself after a few seconds so a stray tap never leaves a live control primed.
+ */
+export function armedButton(label, armedLabel, classes, action) {
+  let armed = false;
+  let timer = null;
+
+  const button = el(`button.btn.${classes}`, {
+    type: "button",
+    text: label,
+    onclick: async () => {
+      if (!armed) {
+        armed = true;
+        button.textContent = armedLabel;
+        button.classList.add("armed");
+        navigator.vibrate?.(20);
+        timer = setTimeout(() => {
+          armed = false;
+          button.textContent = label;
+          button.classList.remove("armed");
+        }, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      button.disabled = true;
+      await action();
+    },
+  });
+
+  return button;
+}
+
+/** A short-lived inline message, for the places a native alert was reached for. */
+export function flash(container, message, tone = "info") {
+  container.querySelectorAll(".notice").forEach((n) => n.remove());
+  const node = notice(message, tone);
+  container.prepend(node);
+  setTimeout(() => node.remove(), 5000);
+  return node;
+}

@@ -52,6 +52,17 @@ export const shortenCourse = (raceId, { fastLaps, slowLaps }) =>
 export const abandonRace = (raceId) => append(raceId, "race_abandoned");
 
 /**
+ * Adjust a boat's result before publishing. The payload keys are a contract
+ * shared with 003_views.sql, which computes the same answers in Postgres —
+ * change one and you must change the other.
+ */
+export const correct = (raceId, entryId, { laps, elapsed_seconds, code }) =>
+  append(raceId, "correction", {
+    entryId,
+    payload: { laps, elapsed_seconds, code: code ?? null },
+  });
+
+/**
  * Undo an earlier event by appending a tombstone. The original stays in the
  * log for good — this is a safety record, and "it was recorded and then
  * corrected" is a different fact from "it never happened".
