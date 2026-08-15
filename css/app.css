@@ -69,14 +69,18 @@ body{
 h1{font-family:var(--disp);font-weight:700;text-transform:uppercase;line-height:.95;letter-spacing:.005em}
 h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:1.5rem;line-height:1;margin:18px 0 10px}
 
-/* ---- sync indicator: honest about what is still on the phone ---- */
+/* ---- sync indicator: honest about what is still on the phone.
+   A button, because tapping it opens the detail sheet. ---- */
 .sync-pill{
   flex:none;display:flex;align-items:center;gap:7px;
   background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);
-  border-radius:3px;padding:7px 10px;min-height:36px;
+  border-radius:3px;padding:7px 10px;min-height:44px;cursor:pointer;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
   font-size:.74rem;font-weight:600;color:#fff;white-space:nowrap;
+  font-variant-numeric:tabular-nums;
 }
+.sync-pill:active{background:rgba(255,255,255,.18)}
+.sync-pill:focus-visible{outline:2px solid #9FC0F0;outline-offset:2px}
 .sync-pill .dot{width:9px;height:9px;border-radius:50%;background:#9FC0F0;flex:none}
 .sync-pill[data-state="synced"] .dot{background:#4CC38A}
 .sync-pill[data-state="waiting"] .dot{background:#F2B33D}
@@ -126,6 +130,31 @@ h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spaci
 .resume .actions{padding:0;gap:8px}
 .resume .btn{background:var(--flag);border-color:var(--flag)}
 .resume .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+
+/* ---- bottom sheet (sync detail) ---- */
+.sheet{
+  border:none;padding:0;margin:auto auto 0;max-width:520px;width:100%;
+  background:var(--chalk);color:var(--ink);
+  border-radius:3px 3px 0 0;box-shadow:0 -8px 40px rgba(10,27,61,.35);
+}
+.sheet::backdrop{background:rgba(10,27,61,.6)}
+.sheet-body{padding:18px 16px calc(14px + var(--safe-b));display:flex;flex-direction:column;gap:12px}
+.sheet h2{margin:0}
+.sheet-rows{margin:0;display:flex;flex-direction:column;gap:0}
+.sheet-row{
+  display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+  padding:11px 0;border-bottom:1px solid var(--line);
+}
+.sheet-row:last-child{border-bottom:none}
+.sheet-row[hidden]{display:none}
+.sheet-row dt{font-size:.86rem;color:var(--slate);min-width:0}
+.sheet-row dd{
+  margin:0;font-family:var(--mono);font-weight:600;font-size:.95rem;
+  white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.sheet-row dd.stuck{color:var(--flag)}
+.sheet-note{margin:0;font-size:.82rem;color:var(--slate);line-height:1.45}
+.sheet .actions{padding:4px 0 0}
 
 /* ---- club PIN prompt ---- */
 .pin-dialog{

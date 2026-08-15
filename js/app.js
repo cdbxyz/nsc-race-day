@@ -38,10 +38,15 @@ async function boot() {
   sync.setBackend(supabaseBackend);
   sync.start();
 
+  wireSyncSheet();
+
   pinPrompt = createPinPrompt(document.getElementById("pin-dialog"), {
     onSignedIn: () => {
-      sync.flush();
+      // Pull the registers straight away rather than waiting for a race day to
+      // start: it is the fastest proof the phone can actually reach the club
+      // database, and it stamps the pill within a second or two.
       refreshReferenceData();
+      sync.flush();
     },
   });
 
@@ -80,6 +85,8 @@ async function refreshReferenceData() {
   try {
     const { counts } = await pullReferenceData();
     console.info("[reference] refreshed", counts);
+    // The pull recorded a server contact; let the pill show it.
+    await sync.refreshStatus();
   } catch (err) {
     // Stale reference data is survivable — the last-refreshed stamp is what
     // tells the OOD how old it is.
@@ -107,26 +114,112 @@ async function refreshUpdateAllowed() {
   }
 }
 
+/**
+ * Time of day, with the date added once it is no longer today — "Synced 14:32"
+ * is reassuring on a race afternoon and misleading the next morning.
+ */
+function contactLabel(ts) {
+  if (!ts) return null;
+  const when = new Date(ts);
+  const time = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const sameDay = when.toDateString() === new Date().toDateString();
+  if (sameDay) return time;
+  return `${when.toLocaleDateString([], { day: "numeric", month: "short" })} ${time}`;
+}
+
 function wireSyncIndicator() {
   const pill = document.getElementById("sync-pill");
   const label = document.getElementById("sync-label");
 
-  sync.subscribe(({ state, pending, blocked }) => {
+  sync.subscribe(({ state, pending, blocked, lastSyncedAt }) => {
     pill.dataset.state = state;
     if (blocked) {
       // Never hide this. Those events are on the phone and nowhere else.
       label.textContent = `${blocked} stuck${pending ? ` · ${pending} waiting` : ""}`;
     } else if (state === "offline") {
+      // Unchanged by design: offline is normal on the beach, not a warning.
       label.textContent = pending ? `Offline · ${pending} waiting` : "Offline";
     } else if (state === "error") {
       label.textContent = `Retrying · ${pending} waiting`;
     } else if (pending) {
       label.textContent = `${pending} waiting`;
     } else {
-      label.textContent = "All synced";
+      // An empty outbox alone proves nothing — it looks identical on a phone
+      // that has never reached the server. Show when we last actually did.
+      const at = contactLabel(lastSyncedAt);
+      label.textContent = at ? `Synced · ${at}` : "Not synced yet";
     }
   });
+
+  pill.addEventListener("click", () => openSyncSheet());
 }
+
+/** The detail behind the pill, including a home for stuck events. */
+function wireSyncSheet() {
+  const sheet = document.getElementById("sync-sheet");
+  const contact = sheet.querySelector("#sheet-contact");
+  const waiting = sheet.querySelector("#sheet-waiting");
+  const stuckRow = sheet.querySelector("#sheet-stuck-row");
+  const stuck = sheet.querySelector("#sheet-stuck");
+  const auth = sheet.querySelector("#sheet-auth");
+  const note = sheet.querySelector("#sheet-note");
+  const pinButton = sheet.querySelector("#sheet-pin");
+  const retryButton = sheet.querySelector("#sheet-retry");
+
+  function render() {
+    const { pending, blocked, lastSyncedAt } = sync.status;
+    const signedIn = api.isSignedIn();
+
+    contact.textContent = contactLabel(lastSyncedAt) ?? "never";
+    waiting.textContent = String(pending);
+    stuck.textContent = String(blocked || 0);
+    stuckRow.hidden = !blocked;
+    auth.textContent = signedIn ? "yes" : "no";
+
+    pinButton.hidden = signedIn;
+    retryButton.hidden = !blocked;
+
+    if (blocked) {
+      note.textContent =
+        "Stuck events are safe on this phone but the database refused them. " +
+        "They need someone to look at them — nothing has been lost.";
+    } else if (!signedIn) {
+      note.textContent =
+        "Without the PIN, everything is still recorded on this phone. It just " +
+        "cannot reach the club database yet.";
+    } else if (!lastSyncedAt) {
+      note.textContent = "This phone has not reached the club database yet.";
+    } else if (pending) {
+      note.textContent = "Waiting for signal. Nothing is lost while it waits.";
+    } else {
+      note.textContent = "Everything recorded on this phone is in the club database.";
+    }
+  }
+
+  sheet.querySelector("#sheet-close").addEventListener("click", () => sheet.close());
+  pinButton.addEventListener("click", () => {
+    sheet.close();
+    pinPrompt.open();
+  });
+  retryButton.addEventListener("click", async () => {
+    retryButton.disabled = true;
+    await db.unblockOutbox();
+    await sync.flush();
+    retryButton.disabled = false;
+    render();
+  });
+
+  sync.subscribe(() => {
+    if (sheet.open) render();
+  });
+
+  openSyncSheet = () => {
+    render();
+    if (!sheet.open) sheet.showModal();
+  };
+}
+
+let openSyncSheet = () => {};
 
 async function showResumeBanner() {
   const slot = document.getElementById("resume-slot");

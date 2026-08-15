@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Officer of the Day race management PWA for Netley Sailing Club.",
+  "description": "Officer of the Day race management PWA for Nefyn Sailing Club.",
   "comment": "Node is only ever used to run the tests. Nothing here is built, bundled or shipped — GitHub Pages serves the repo as-is.",
   "scripts": {
     "prepare": "node tools/install-hooks.mjs",

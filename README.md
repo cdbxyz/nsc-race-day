@@ -1,6 +1,6 @@
 # NSC Race Day
 
-Officer of the Day race management for Netley Sailing Club — an offline-first
+Officer of the Day race management for Nefyn Sailing Club — an offline-first
 PWA that runs a whole race day from a phone on a beach with no signal.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for scope, schema and behaviour, and

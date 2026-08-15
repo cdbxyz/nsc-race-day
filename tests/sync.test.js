@@ -320,3 +320,71 @@ test("an ordinary network failure is still retried, not set aside", async () => 
   assert.equal(await db.countOutbox(), 1);
   assert.deepEqual(timers.delays(), [1000]);
 });
+
+/* ---------------------------------------------------------------------------
+ * Evidence of contact.
+ *
+ * An empty outbox proves nothing on its own — it looks exactly the same on a
+ * phone that has never once reached the server. The pill needs a timestamp,
+ * and that timestamp has to survive a reload.
+ * ------------------------------------------------------------------------ */
+
+test("a phone that has never reached the server has no contact stamp", async () => {
+  const { sync } = makeSync(testBackend());
+  await sync.refreshStatus();
+
+  assert.equal(sync.status.state, "synced", "an empty outbox is still 'synced'");
+  assert.equal(sync.status.lastSyncedAt, null, "but there is nothing to show for it");
+});
+
+test("a successful flush records when the server answered", async () => {
+  const before = Date.now();
+  const { sync } = makeSync(testBackend());
+
+  await db.localWrite("race_events", event());
+  await sync.flush();
+
+  const stamp = await db.lastServerContact();
+  assert.ok(stamp >= before, "stamped");
+  assert.equal(sync.status.lastSyncedAt, stamp, "and reported");
+});
+
+test("the contact stamp survives a reload", async () => {
+  const { sync } = makeSync(testBackend());
+  await db.localWrite("race_events", event());
+  await sync.flush();
+  const stamp = sync.status.lastSyncedAt;
+
+  // A new sync instance is what a page reload amounts to: fresh memory,
+  // same IndexedDB.
+  const { sync: reloaded } = makeSync(testBackend());
+  await reloaded.refreshStatus();
+
+  assert.equal(reloaded.status.lastSyncedAt, stamp);
+});
+
+test("a failed flush does not claim contact", async () => {
+  const backend = testBackend();
+  backend.mode = "fail";
+  const { sync } = makeSync(backend);
+
+  await db.localWrite("race_events", event());
+  await sync.flush();
+
+  assert.equal(await db.lastServerContact(), null);
+  assert.equal(sync.status.lastSyncedAt, null);
+});
+
+test("a reference-data pull counts as contact even with an empty outbox", async () => {
+  // This is the case that prompted all of it: sign in, nothing queued, and the
+  // pill still needs something truthful to show.
+  const { sync } = makeSync(testBackend());
+  const at = Date.now();
+  await db.recordServerContact(at);
+
+  await sync.refreshStatus();
+
+  assert.equal(sync.status.pending, 0);
+  assert.equal(sync.status.state, "synced");
+  assert.equal(sync.status.lastSyncedAt, at);
+});

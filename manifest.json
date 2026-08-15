@@ -1,7 +1,7 @@
 {
   "name": "NSC Race Day",
   "short_name": "Race Day",
-  "description": "Officer of the Day race management for Netley Sailing Club — works with no signal.",
+  "description": "Officer of the Day race management for Nefyn Sailing Club — works with no signal.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

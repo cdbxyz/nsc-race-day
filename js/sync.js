@@ -75,7 +75,10 @@ export function createSync({
   async function refreshStatus(extra = {}) {
     const pending = await db.countOutbox();
     const blocked = await db.countBlocked();
-    emit({ pending, blocked, state: stateFor(pending, blocked), ...extra });
+    // Read the stamp rather than trusting memory: it survives reloads, and a
+    // reference-data pull counts as contact just as much as a flush does.
+    const lastSyncedAt = await db.lastServerContact();
+    emit({ pending, blocked, lastSyncedAt, state: stateFor(pending, blocked), ...extra });
     return pending;
   }
 
@@ -138,7 +141,8 @@ export function createSync({
         // Only now is it safe to forget these — the backend has them.
         await db.clearOutbox(batch.map((e) => e.seq));
         consecutiveFailures = 0;
-        await refreshStatus({ lastSyncedAt: Date.now(), lastError: null });
+        await db.recordServerContact();
+        await refreshStatus({ lastError: null });
       }
     } finally {
       inFlight = false;

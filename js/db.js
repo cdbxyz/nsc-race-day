@@ -223,6 +223,20 @@ export async function getMeta(id) {
   return row ? row.value : undefined;
 }
 
+/* When we last got a reply from the server — from either an outbox flush or a
+   reference-data pull. Persisted so it survives a reload, because "All synced"
+   with an empty outbox is otherwise indistinguishable from having never
+   reached the server at all. */
+export const LAST_CONTACT_KEY = "last_contact_at";
+
+export async function recordServerContact(at = Date.now()) {
+  return setMeta(LAST_CONTACT_KEY, at);
+}
+
+export async function lastServerContact() {
+  return (await getMeta(LAST_CONTACT_KEY)) ?? null;
+}
+
 export async function setMeta(id, value) {
   const db = await openDB();
   const tx = db.transaction("meta", "readwrite");

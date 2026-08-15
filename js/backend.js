@@ -98,6 +98,10 @@ export async function pullReferenceData() {
 
   const at = Date.now();
   await db.setMeta(LAST_REFRESHED_KEY, at);
+  // A successful pull is proof the server answered, which is what the sync
+  // pill reports — otherwise a fresh sign-in with an empty outbox has nothing
+  // to show for itself.
+  await db.recordServerContact(at);
   return { at, counts };
 }
 
