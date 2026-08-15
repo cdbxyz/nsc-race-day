@@ -139,11 +139,17 @@ already-installed phones there is a new build — see the README.)
 
 ## 7. Set the club PIN
 
+> **Never commit the real PIN to this repository.** It is public: anything
+> written here is readable by anyone, and git remembers it even after the line
+> is deleted. The PIN is the only thing standing between the internet and
+> write access to the club's race records. Keep it where the committee keeps
+> its other shared secrets, and put a placeholder in this file.
+
 **This is the step that matters before first real use.** Dashboard → **SQL
 Editor**:
 
 ```sql
-select set_club_pin('1957');
+select set_club_pin('<the club PIN>');
 ```
 
 Minimum four characters; six digits is a reasonable club choice. It is stored
@@ -151,7 +157,8 @@ bcrypt-hashed — the plain PIN is never written down anywhere in the system, so
 if the committee forgets it, set a new one.
 
 **Rotating it** is the same statement with a new value. No redeploy, no code
-change, nothing to reinstall on anyone's phone.
+change, nothing to reinstall on anyone's phone. Rotate immediately if the PIN
+has ever been written somewhere public.
 
 ### If someone is locked out
 
