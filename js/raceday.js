@@ -278,8 +278,36 @@ export async function setEntryLaps(entryId, lapsOverride) {
   await db.localWrite("entries", { ...entry, laps_override: value });
 }
 
-export async function removeEntry(entryId) {
+/**
+ * Sign-on is only editable before the race exists on the water.
+ *
+ * Once a sequence has started, the sign-on list is the day's tally record —
+ * it is what the stand-down check reads to work out whether every boat that
+ * went out has come back. Deleting an entry after that point would erase a
+ * boat that was really there, which is precisely the thing nobody may do.
+ * Mistakes from then on are handled with codes (DNS, DNC, RET), which leave
+ * the boat visible and explain what happened to it.
+ */
+export const EDITABLE_STATUSES = new Set(["setup", "prestart"]);
+
+export function canRemoveEntries(race) {
+  return Boolean(race) && EDITABLE_STATUSES.has(race.status);
+}
+
+export async function removeEntry(entryId, race) {
+  const target = race ?? (await raceForEntry(entryId));
+  if (!canRemoveEntries(target)) {
+    throw new Error(
+      "This race has already started. Use a code (DNS, DNC or RET) so the boat stays on the tally."
+    );
+  }
   await db.localDelete("entries", entryId);
+}
+
+async function raceForEntry(entryId) {
+  const entry = await db.get("entries", entryId);
+  if (!entry) return null;
+  return db.get("races", entry.race_id);
 }
 
 export function entryLaps(entry, race) {

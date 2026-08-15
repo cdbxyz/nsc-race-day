@@ -563,17 +563,30 @@ function entryEditor(data, entry, wins) {
     await render();
   });
 
-  const remove = el("button.btn.danger", {
-    type: "button",
-    text: "Remove from sign-on",
-    onclick: async () => {
-      const boat = data.boatById.get(entry.boat_id);
-      if (!confirm(`Take ${boat?.name ?? "this boat"} off the sign-on list?`)) return;
-      await rd.removeEntry(entry.id);
-      await render();
-    },
-  });
+  wrap.append(helmPick.node, factorPick.node, lapsBox.node);
 
-  wrap.append(helmPick.node, factorPick.node, lapsBox.node, el("div.actions", {}, [remove]));
+  /* Removal disappears once the race exists on the water: from then on the
+     sign-on list is the tally record, and a boat that was there must stay
+     visible. Codes are how a boat stops racing after that. */
+  if (rd.canRemoveEntries(data.race)) {
+    const remove = el("button.btn.danger", {
+      type: "button",
+      text: "Remove from sign-on",
+      onclick: async () => {
+        const boat = data.boatById.get(entry.boat_id);
+        if (!confirm(`Take ${boat?.name ?? "this boat"} off the sign-on list?`)) return;
+        await rd.removeEntry(entry.id, data.race);
+        await render();
+      },
+    });
+    wrap.append(el("div.actions", {}, [remove]));
+  } else {
+    wrap.append(
+      el("p.stub", {
+        text: "Racing has started, so boats stay on the list. Use a code (DNS, DNC or RET) instead.",
+      })
+    );
+  }
+
   return wrap;
 }

@@ -4,6 +4,13 @@ This is a mobile-first PWA for a sailing club Officer of the Day, per ARCHITECTU
 (read it before any work — it is the source of truth for scope, schema and behaviour).
 
 Hard rules:
+- **No real secret ever appears in any file in this repo.** It is public, and
+  git remembers deleted lines — a leaked value must be rotated, not just
+  removed. Documentation, SETUP.md and every code sample use `<placeholder>`
+  values only; example SQL calling `set_club_pin` shows a placeholder, never
+  digits. Service-role keys and database passwords live in the Supabase
+  environment and are read from there, never written down. The pre-commit
+  hook runs `tools/scan-secrets.mjs` and will refuse the commit.
 - The club is **Nefyn Sailing Club (never Netley)**. NSC expands to Nefyn
   Sailing Club everywhere it appears — UI copy, page titles, the PWA manifest,
   PDF and print headers, CSV exports. Check this whenever you write club-facing

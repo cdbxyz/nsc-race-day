@@ -1,9 +1,17 @@
 #!/bin/sh
-# Keeps sw.js's shell list and cache version in step with the files being
-# committed, so nobody has to remember to bump anything.
+# Two jobs, both about mistakes that are expensive to notice late.
+#
+#   1. Refuse the commit if a staged file looks like it contains a real secret.
+#      The club PIN was committed to this public repo once; git remembers, so
+#      the PIN had to be rotated. Cheaper to stop it here.
+#   2. Keep sw.js's shell list and cache version in step with the files being
+#      committed, so nobody has to remember to bump anything.
 #
 # Enable once per clone:  git config core.hooksPath .githooks
+# (npm install does this for you — see tools/install-hooks.mjs)
 set -e
+
+node tools/scan-secrets.mjs --staged
 
 node tools/stamp-sw.mjs
 

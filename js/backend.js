@@ -92,32 +92,46 @@ export const LAST_REFRESHED_KEY = "reference_last_refreshed";
 
 /**
  * Refresh the cached reference data.
+ *
+ * The transport is injected so tests can drive this exact code with a stand-in
+ * server — the shape it writes and the shape handicap.js reads have to match,
+ * and testing the two halves separately is what let them drift apart once
+ * already.
+ *
  * @returns {Promise<{at:number, counts:object}>}
  */
-export async function pullReferenceData() {
-  if (!api.isSignedIn()) throw new Error("not signed in");
+export function createReferenceSync({ select, isSignedIn }) {
+  return async function pullReferenceData() {
+    if (!isSignedIn()) throw new Error("not signed in");
 
-  const counts = {};
-  for (const table of REFERENCE_TABLES) {
-    const rows = await api.select(table);
-    await db.bulkPut(table, rows);
-    counts[table] = rows.length;
-  }
+    const counts = {};
+    for (const table of REFERENCE_TABLES) {
+      const rows = await select(table);
+      await db.bulkPut(table, rows);
+      counts[table] = rows.length;
+    }
 
-  // Season wins drive the handicap factor at sign-on, so they are cached with
-  // the rest and read from cache when offline (ARCHITECTURE.md section 5).
-  const wins = await api.select("helm_season_wins");
-  await db.setMeta("helm_season_wins", wins);
-  counts.helm_season_wins = wins.length;
+    // Season wins drive the handicap factor at sign-on, so they are cached
+    // with the rest and read from cache when offline (ARCHITECTURE.md §5).
+    // Stored as the view's rows, which is what winsForHelm() takes.
+    const wins = await select("helm_season_wins");
+    await db.setMeta("helm_season_wins", wins);
+    counts.helm_season_wins = wins.length;
 
-  const at = Date.now();
-  await db.setMeta(LAST_REFRESHED_KEY, at);
-  // A successful pull is proof the server answered, which is what the sync
-  // pill reports — otherwise a fresh sign-in with an empty outbox has nothing
-  // to show for itself.
-  await db.recordServerContact(at);
-  return { at, counts };
+    const at = Date.now();
+    await db.setMeta(LAST_REFRESHED_KEY, at);
+    // A successful pull is proof the server answered, which is what the sync
+    // pill reports — otherwise a fresh sign-in with an empty outbox has
+    // nothing to show for itself.
+    await db.recordServerContact(at);
+    return { at, counts };
+  };
 }
+
+export const pullReferenceData = createReferenceSync({
+  select: api.select,
+  isSignedIn: api.isSignedIn,
+});
 
 /** When the reference data was last successfully pulled, or null. */
 export async function lastRefreshedAt() {
