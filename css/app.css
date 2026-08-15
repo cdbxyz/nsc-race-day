@@ -1,0 +1,186 @@
+/* NSC Race Day — design system.
+   Carried over from the club's race calculator (reference/index.html) so the two
+   tools look like one family. Colours, type and component feel are unchanged;
+   the layout is mobile-only (design at 390px) and touch targets are 44px+. */
+
+/* ---- fonts: self-hosted latin subsets, so the app renders identically with
+   no signal on the beach. Google Fonts is never contacted at runtime. ---- */
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/barlow-condensed-500.woff2") format("woff2")}
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/barlow-condensed-600.woff2") format("woff2")}
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:700;font-display:swap;src:url("../fonts/barlow-condensed-700.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url("../fonts/ibm-plex-sans-400.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/ibm-plex-sans-500.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/ibm-plex-sans-600.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("../fonts/ibm-plex-mono-400.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/ibm-plex-mono-500.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/ibm-plex-mono-600.woff2") format("woff2")}
+
+:root{
+  --mist:#F2F5FA; --chalk:#FFFFFF; --ink:#0A1B3D; --hull:#1B3B76;
+  --slate:#5F6E8C; --line:#D2DAE8; --flag:#C8102E;
+  --go:#0E7A4A;
+  --disp:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--mist);color:var(--ink);font-family:var(--body);
+  font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  -webkit-text-size-adjust:100%;
+  /* the mast is fixed; keep content clear of it and of the home indicator */
+  padding-bottom:calc(24px + var(--safe-b));
+}
+.wrap{max-width:520px;margin:0 auto;padding:0 14px 40px}
+
+/* ---- mast: fixed so the sync indicator is never scrolled away ---- */
+.mast{
+  position:sticky;top:0;z-index:20;
+  background:var(--ink);color:#fff;
+  padding:calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));
+  display:flex;align-items:center;gap:12px;
+}
+.mast .brand{min-width:0;flex:1}
+.mast .eyebrow{color:#9FC0F0}
+.mast h1{color:#fff;font-size:1.5rem;margin:0;white-space:nowrap}
+.mast h1 .thin{color:#B9CCEA;font-weight:500}
+.eyebrow{font-family:var(--disp);font-weight:600;text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;color:var(--slate)}
+h1{font-family:var(--disp);font-weight:700;text-transform:uppercase;line-height:.95;letter-spacing:.005em}
+h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:1.5rem;line-height:1;margin:18px 0 10px}
+
+/* ---- sync indicator: honest about what is still on the phone ---- */
+.sync-pill{
+  flex:none;display:flex;align-items:center;gap:7px;
+  background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);
+  border-radius:3px;padding:7px 10px;min-height:36px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
+  font-size:.74rem;font-weight:600;color:#fff;white-space:nowrap;
+}
+.sync-pill .dot{width:9px;height:9px;border-radius:50%;background:#9FC0F0;flex:none}
+.sync-pill[data-state="synced"] .dot{background:#4CC38A}
+.sync-pill[data-state="waiting"] .dot{background:#F2B33D}
+.sync-pill[data-state="offline"] .dot{background:var(--slate)}
+.sync-pill[data-state="error"]{border-color:var(--flag)}
+.sync-pill[data-state="error"] .dot{background:var(--flag)}
+
+/* ---- resume banner ---- */
+.resume{
+  background:var(--ink);color:#fff;border-left:3px solid var(--flag);
+  border-radius:3px;padding:12px;margin:14px 0 0;
+  display:flex;flex-direction:column;gap:10px;
+}
+.resume .eyebrow{color:#9FC0F0}
+.resume .what{font-family:var(--disp);font-size:1.35rem;font-weight:600;line-height:1.05;text-transform:uppercase}
+.resume .detail{font-family:var(--mono);font-size:.76rem;color:#B9CCEA}
+.resume .actions{padding:0;gap:8px}
+.resume .btn{background:var(--flag);border-color:var(--flag)}
+.resume .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+
+/* ---- pages ---- */
+.page[hidden]{display:none}
+.page{padding-top:4px}
+
+/* ---- panels ---- */
+.panel{background:var(--chalk);border:1px solid var(--line);border-radius:3px;margin-top:14px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.panel-title{font-family:var(--disp);text-transform:uppercase;letter-spacing:.15em;font-size:.82rem;font-weight:700;color:var(--ink)}
+.count{font-family:var(--mono);font-size:.74rem;color:var(--slate)}
+.panel-body{padding:12px}
+
+/* ---- form fields ---- */
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field label{font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-size:.68rem;font-weight:600;color:var(--slate)}
+.field input,.field select{
+  font-family:var(--mono);font-size:16px;color:var(--ink);
+  border:1px solid var(--line);border-radius:2px;background:var(--chalk);
+  padding:10px 8px;width:100%;min-width:0;min-height:44px;
+}
+.field input.text{font-family:var(--body);text-align:left}
+.field input:focus-visible,.field select:focus-visible{outline:2px solid var(--hull);outline-offset:-1px;border-color:var(--hull)}
+
+/* ---- buttons ---- */
+button.btn{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.11em;
+  font-weight:600;font-size:.88rem;padding:12px 15px;border-radius:2px;
+  cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;
+  flex:1 1 auto;min-height:48px;
+}
+button.btn.ghost{background:transparent;color:var(--ink)}
+button.btn.danger{background:var(--flag);border-color:var(--flag);color:#fff}
+button.btn:active{background:var(--hull);border-color:var(--hull);color:var(--chalk)}
+button.btn:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+button.btn[disabled]{opacity:.45;cursor:default}
+.actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 12px 12px}
+.kill{
+  border:1px solid var(--line);background:var(--chalk);border-radius:2px;
+  padding:0 14px;min-height:44px;min-width:96px;cursor:pointer;color:var(--slate);
+  font-family:var(--disp);font-size:.76rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+}
+.kill:active{border-color:var(--flag);color:var(--flag)}
+.linkish{background:none;border:none;padding:0;color:var(--hull);cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:3px}
+
+/* ---- toggle switch (navy track, red when on) ---- */
+.switch{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;min-height:44px}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.track{width:44px;height:24px;border-radius:999px;background:#3E568C;position:relative;transition:background .18s ease;flex:none}
+.knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .18s ease}
+.switch input:checked + .track{background:var(--flag)}
+.switch input:checked + .track .knob{transform:translateX(20px)}
+.switch input:focus-visible + .track{outline:2px solid #9FC0F0;outline-offset:2px}
+.switch .lbl{font-family:var(--disp);text-transform:uppercase;letter-spacing:.11em;font-size:.8rem;font-weight:600}
+
+/* ---- result / boat cards (fleshed out in later phases) ---- */
+.cards{padding:8px}
+.card{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"pos who time" "gap gap gap";gap:4px 10px;align-items:center;padding:10px 6px;border-bottom:1px solid #E6EBF4}
+.card:last-child{border-bottom:none}
+.cpos{grid-area:pos;font-family:var(--disp);font-weight:700;font-size:1.9rem;line-height:1;min-width:1.4em}
+.card.lead .cpos{color:var(--flag)}
+.cwho{grid-area:who;min-width:0}
+.cboat{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmeta{font-family:var(--mono);font-size:.68rem;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctime{grid-area:time;text-align:right}
+.ccorr{font-family:var(--mono);font-weight:600;font-size:1rem;font-variant-numeric:tabular-nums}
+.celap{font-family:var(--mono);font-size:.68rem;color:var(--slate)}
+.cgap{grid-area:gap;margin-top:2px}
+.card.out{opacity:.62}
+.card.out .cpos{font-size:1.2rem;color:var(--slate)}
+.gapbar{height:8px;background:#E6EBF4;border-radius:1px;overflow:hidden}
+.gapbar i{display:block;height:100%;background:var(--hull);border-radius:1px}
+.lead .gapbar i{background:var(--flag)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---- empty / placeholder states ---- */
+.empty{padding:30px 16px;text-align:center;color:var(--slate)}
+.empty p{margin:0 0 14px}
+.stub{font-family:var(--mono);font-size:.78rem;color:var(--slate);padding:12px}
+.stub code{background:var(--mist);padding:1px 4px;border-radius:2px}
+
+/* ---- dev panel ---- */
+.dev-log{
+  font-family:var(--mono);font-size:.72rem;line-height:1.5;
+  background:var(--ink);color:#B9CCEA;border-radius:2px;
+  padding:10px;margin:0;max-height:16em;overflow:auto;white-space:pre-wrap;word-break:break-all;
+}
+.dev-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.dev-row:last-child{border-bottom:none}
+.dev-row label{font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-size:.72rem;font-weight:600;color:var(--slate);flex:1}
+.dev-row input[type=range]{flex:1;min-height:44px;accent-color:var(--flag)}
+.dev-row output{font-family:var(--mono);font-size:.8rem;min-width:3.5em;text-align:right}
+
+/* ---- footer nav. Scaffolding: the real journey moves the OOD forward one
+   step at a time from Phase 3, and this goes away. ---- */
+.foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+.foot a{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;
+  font-size:.72rem;font-weight:600;color:var(--slate);text-decoration:none;
+  padding:8px 8px;min-height:44px;display:flex;align-items:center;
+}
+.foot a:active{color:var(--flag)}
+.foot a:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}

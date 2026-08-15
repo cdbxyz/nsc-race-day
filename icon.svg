@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="NSC Race Day">
+  <title>NSC Race Day</title>
+  <!-- Full-bleed navy so the icon works as a maskable icon on Android.
+       The lettering is drawn as paths, not text, so it renders identically
+       everywhere without depending on a font being available. -->
+  <rect width="512" height="512" fill="#0A1B3D"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- N -->
+    <path d="M141 321 V191 L203 321 V191"/>
+    <!-- S -->
+    <path d="M287 222 C287 199 268 191 256 191 C244 191 225 199 225 222
+             C225 245 244 252 256 256 C268 260 287 267 287 290
+             C287 313 268 321 256 321 C244 321 225 313 225 290"/>
+    <!-- C -->
+    <path d="M371 222 C371 199 355 191 340 191 C322 191 309 210 309 256
+             C309 302 322 321 340 321 C355 321 371 313 371 290"/>
+  </g>
+  <!-- club red, the same accent the calculator uses -->
+  <rect x="141" y="347" width="230" height="14" fill="#C8102E"/>
+</svg>
