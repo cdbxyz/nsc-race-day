@@ -116,10 +116,33 @@ export async function racesForDay(raceDayId) {
   return races.sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
 }
 
+/* How far through the day each status is. Used to make status changes
+   monotonic: revisiting the checklist must not drag a racing race backwards. */
+const PROGRESS = {
+  setup: 0,
+  prestart: 1,
+  sequence: 2,
+  racing: 3,
+  finished: 4,
+  published: 5,
+  abandoned: 6,
+};
+
+/** Advance a race's status, never rewind it. */
+export async function setRaceStatusIfEarlier(race, status, extra = {}) {
+  if ((PROGRESS[race.status] ?? 0) >= (PROGRESS[status] ?? 0)) return race;
+  const row = { ...race, status, ...extra };
+  await db.localWrite("races", row);
+  return row;
+}
+
 /** The race the OOD is working on: the first that has not been sailed yet. */
 export async function currentRace(raceDayId) {
   const races = await racesForDay(raceDayId);
-  return races.find((r) => r.status === "setup" || r.status === "prestart") ?? races[0] ?? null;
+  // The first race still in play. A race under way outranks a later one
+  // sitting in setup, so the OOD is never sent back to sign-on mid-sequence.
+  const inPlay = races.find((r) => (PROGRESS[r.status] ?? 0) < PROGRESS.finished);
+  return inPlay ?? races[races.length - 1] ?? null;
 }
 
 /* ---- same-day wins ------------------------------------------------------ */
