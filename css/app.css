@@ -127,6 +127,32 @@ h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spaci
 .resume .btn{background:var(--flag);border-color:var(--flag)}
 .resume .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
 
+/* ---- club PIN prompt ---- */
+.pin-dialog{
+  border:none;border-radius:3px;padding:0;max-width:340px;width:calc(100% - 28px);
+  background:var(--chalk);color:var(--ink);
+  box-shadow:0 10px 40px rgba(10,27,61,.35);
+}
+.pin-dialog::backdrop{background:rgba(10,27,61,.6)}
+.pin-dialog form{padding:18px 16px 14px;display:flex;flex-direction:column;gap:10px}
+.pin-dialog h2{margin:0}
+.pin-blurb{margin:0;font-size:.86rem;color:var(--slate);line-height:1.4}
+.pin-dialog .field input{font-size:1.5rem;letter-spacing:.3em;text-align:center;min-height:52px}
+.pin-error{
+  margin:0;font-size:.84rem;font-weight:500;color:var(--flag);
+  border-left:3px solid var(--flag);padding-left:9px;
+}
+.pin-dialog .actions{padding:4px 0 0}
+
+/* ---- reference data freshness ---- */
+.refresh-line{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-family:var(--mono);font-size:.72rem;color:var(--slate);
+  padding:8px 12px;border-top:1px solid var(--line);
+  font-variant-numeric:tabular-nums;
+}
+.refresh-line button{min-height:44px}
+
 /* ---- pages ---- */
 .page[hidden]{display:none}
 .page{padding-top:4px}

@@ -23,7 +23,7 @@ const MAX_DELAY = 30_000;
  * @param {{name:string, push:(batch:object[])=>Promise<void>}} deps.backend
  */
 export function createSync({
-  backend,
+  backend: initialBackend,
   setTimeout: setTimer = globalThis.setTimeout.bind(globalThis),
   clearTimeout: clearTimer = globalThis.clearTimeout.bind(globalThis),
   isOnline = () => globalThis.navigator?.onLine !== false,
@@ -33,8 +33,9 @@ export function createSync({
   // ±20% so a fleet of devices coming back into signal doesn't stampede.
   jitter = () => 0.8 + Math.random() * 0.4,
 } = {}) {
+  let backend = initialBackend;
   const listeners = new Set();
-  let status = { state: "synced", pending: 0, lastSyncedAt: null, lastError: null };
+  let status = { state: "synced", pending: 0, blocked: 0, lastSyncedAt: null, lastError: null };
   let inFlight = false;
   let consecutiveFailures = 0;
   let lastDelay = 0;
@@ -46,6 +47,7 @@ export function createSync({
     const unchanged =
       merged.state === status.state &&
       merged.pending === status.pending &&
+      merged.blocked === status.blocked &&
       merged.lastSyncedAt === status.lastSyncedAt &&
       merged.lastError === status.lastError;
     status = merged;
@@ -59,7 +61,10 @@ export function createSync({
     }
   }
 
-  function stateFor(pending) {
+  function stateFor(pending, blocked = 0) {
+    // Something the server refused outright needs a human, and saying so
+    // outranks reporting the connection.
+    if (blocked > 0) return "error";
     if (!isOnline()) return "offline";
     // One or two failed pushes on patchy signal is business as usual; only call
     // it an error once it looks like something is actually wrong.
@@ -69,7 +74,8 @@ export function createSync({
 
   async function refreshStatus(extra = {}) {
     const pending = await db.countOutbox();
-    emit({ pending, state: stateFor(pending), ...extra });
+    const blocked = await db.countBlocked();
+    emit({ pending, blocked, state: stateFor(pending, blocked), ...extra });
     return pending;
   }
 
@@ -110,9 +116,22 @@ export function createSync({
         try {
           await backend.push(batch);
         } catch (err) {
+          const message = String(err && err.message ? err.message : err);
+
+          // A request the server will refuse every time — a malformed row, a
+          // constraint violation — must not be retried forever. Retrying it
+          // would also strand every event tapped after it, because batches go
+          // up in order. Set it aside instead: still on the phone, still in
+          // the outbox, no longer blocking the race behind it.
+          if (err?.retryable === false) {
+            await db.markOutboxBlocked(batch.map((e) => e.seq), err);
+            await refreshStatus({ lastError: message });
+            continue;
+          }
+
           consecutiveFailures += 1;
           await db.markOutboxAttempt(batch.map((e) => e.seq), err);
-          await refreshStatus({ lastError: String(err && err.message ? err.message : err) });
+          await refreshStatus({ lastError: message });
           scheduleRetry();
           break;
         }
@@ -173,6 +192,12 @@ export function createSync({
     start,
     stop,
     refreshStatus,
+    /** Swap the destination — the dev panel points at the fake backend to
+        rehearse bad signal without touching the club's real data. */
+    setBackend(next) {
+      backend = next;
+      consecutiveFailures = 0;
+    },
     get status() {
       return status;
     },
@@ -184,9 +209,10 @@ export function createSync({
 }
 
 /**
- * Stand-in for Supabase until Phase 2. Logs what it is asked to push, fails a
- * configurable share of the time, and stores rows by id so we can prove that
- * replaying a batch changes nothing.
+ * A stand-in for Supabase. Logs what it is asked to push, fails a configurable
+ * share of the time, and stores rows by id so replaying a batch can be shown to
+ * change nothing. The dev panel points sync at this to rehearse bad signal
+ * without writing to the club's real database.
  */
 export function createFakeBackend({ failureRate = 0.3, latency = 150 } = {}) {
   const rows = new Map(); // `${table}:${id}` -> row
@@ -214,6 +240,8 @@ export function createFakeBackend({ failureRate = 0.3, latency = 150 } = {}) {
   };
 }
 
-/** The instance the app uses. Phase 2 swaps the backend for Supabase. */
 export const fakeBackend = createFakeBackend();
+
+/* The instance the app uses. app.js points it at Supabase on boot; it starts
+   on the fake backend so importing this module never reaches the network. */
 export const sync = createSync({ backend: fakeBackend });

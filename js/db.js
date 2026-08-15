@@ -88,6 +88,23 @@ export function newId() {
   return crypto.randomUUID();
 }
 
+/**
+ * The current time, in the form every timestamp column expects.
+ *
+ * CONVENTION: anything destined for a Postgres `timestamptz` — created_at,
+ * occurred_at, start_at, published_at — is stored as an ISO 8601 string, in
+ * IndexedDB as well as in Supabase. Epoch milliseconds are rejected outright
+ * by Postgres ("date/time field value out of range"), and because the outbox
+ * drains in order, one such row would block every event behind it.
+ *
+ * ISO strings also sort correctly as strings, so local ordering still works.
+ * Purely local values (the outbox's own bookkeeping, meta stamps) stay as
+ * numbers — they never leave the device.
+ */
+export function nowIso() {
+  return new Date().toISOString();
+}
+
 /* ---- write notification -------------------------------------------------
    db.js must not import sync.js (sync.js imports db.js), so instead anyone
    interested in "something was just written" subscribes here. */
@@ -217,17 +234,47 @@ export async function setMeta(id, value) {
 
 /* ---- outbox, for sync.js ---- */
 
-/** The oldest `limit` unsynced entries, in seq order. */
+/**
+ * The oldest `limit` entries still worth sending, in seq order.
+ *
+ * Blocked entries are skipped. They are never deleted — a blocked row is still
+ * a race record — but they must not sit at the head of the queue holding up
+ * everything tapped after them.
+ */
 export async function peekOutbox(limit) {
   const db = await openDB();
   const store = db.transaction("outbox", "readonly").objectStore("outbox");
   // getAll on an autoIncrement store returns key order, which is seq order.
-  return reqDone(store.getAll(undefined, limit));
+  const all = await reqDone(store.getAll());
+  const sendable = [];
+  for (const entry of all) {
+    if (entry.blocked) continue;
+    sendable.push(entry);
+    if (limit && sendable.length >= limit) break;
+  }
+  return sendable;
 }
 
+/** Entries still waiting to be sent. */
 export async function countOutbox() {
   const db = await openDB();
-  return reqDone(db.transaction("outbox", "readonly").objectStore("outbox").count());
+  const store = db.transaction("outbox", "readonly").objectStore("outbox");
+  const all = await reqDone(store.getAll());
+  return all.filter((e) => !e.blocked).length;
+}
+
+/** Entries the server refused outright, still held on the device. */
+export async function countBlocked() {
+  const db = await openDB();
+  const store = db.transaction("outbox", "readonly").objectStore("outbox");
+  const all = await reqDone(store.getAll());
+  return all.filter((e) => e.blocked).length;
+}
+
+/** Everything in the outbox, blocked included — for the dev panel. */
+export async function allOutbox() {
+  const db = await openDB();
+  return reqDone(db.transaction("outbox", "readonly").objectStore("outbox").getAll());
 }
 
 /** Remove entries the backend has confirmed. */
@@ -262,6 +309,54 @@ export async function markOutboxAttempt(seqs, error) {
       const entry = cursor.value;
       entry.attempts = (entry.attempts || 0) + 1;
       entry.last_error = message;
+      cursor.update(entry);
+    }
+    cursor.continue();
+  };
+  await done;
+}
+
+/**
+ * Set aside entries the server will never accept, so the queue behind them can
+ * drain. The row stays on the device and stays in the outbox; it is simply no
+ * longer retried until someone looks at it.
+ */
+export async function markOutboxBlocked(seqs, error) {
+  if (!seqs.length) return;
+  const wanted = new Set(seqs);
+  const message = String(error && error.message ? error.message : error);
+  const db = await openDB();
+  const tx = db.transaction("outbox", "readwrite");
+  const done = txDone(tx);
+  const req = tx.objectStore("outbox").openCursor();
+  req.onsuccess = () => {
+    const cursor = req.result;
+    if (!cursor) return;
+    if (wanted.has(cursor.key)) {
+      const entry = cursor.value;
+      entry.blocked = true;
+      entry.last_error = message;
+      entry.blocked_at = Date.now();
+      cursor.update(entry);
+    }
+    cursor.continue();
+  };
+  await done;
+}
+
+/** Put blocked entries back in the queue, after a fix has shipped. */
+export async function unblockOutbox() {
+  const db = await openDB();
+  const tx = db.transaction("outbox", "readwrite");
+  const done = txDone(tx);
+  const req = tx.objectStore("outbox").openCursor();
+  req.onsuccess = () => {
+    const cursor = req.result;
+    if (!cursor) return;
+    if (cursor.value.blocked) {
+      const entry = cursor.value;
+      entry.blocked = false;
+      entry.attempts = 0;
       cursor.update(entry);
     }
     cursor.continue();

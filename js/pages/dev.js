@@ -8,6 +8,9 @@
 
 import * as db from "./../db.js";
 import { sync, fakeBackend } from "./../sync.js";
+import * as api from "./../supabase.js";
+import { supabaseBackend, pullReferenceData, lastRefreshedAt } from "./../backend.js";
+import { promptForPin } from "./../app.js";
 
 let stopWatching = null;
 
@@ -24,6 +27,30 @@ export default {
     failRate.addEventListener("input", () => {
       fakeBackend.failureRate = Number(failRate.value) / 100;
       failOut.textContent = `${failRate.value}%`;
+    });
+
+    const backendSelect = section.querySelector("#dev-backend");
+    const refreshedLine = section.querySelector("#dev-refreshed");
+
+    backendSelect.value = sync.stats().backend === "fake" ? "fake" : "supabase";
+    backendSelect.addEventListener("change", () => {
+      sync.setBackend(backendSelect.value === "fake" ? fakeBackend : supabaseBackend);
+      render();
+    });
+
+    section.querySelector("#dev-signin").addEventListener("click", () => promptForPin());
+    section.querySelector("#dev-signout").addEventListener("click", () => {
+      api.signOut();
+      render();
+    });
+    section.querySelector("#dev-pull").addEventListener("click", async () => {
+      try {
+        const { counts } = await pullReferenceData();
+        alert(`Refreshed: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+      } catch (err) {
+        alert(`Refresh failed: ${err.message}`);
+      }
+      render();
     });
 
     const raceStatus = section.querySelector("#dev-race-status");
@@ -44,6 +71,11 @@ export default {
       render();
     });
     section.querySelector("#dev-flush").addEventListener("click", () => sync.flush());
+    section.querySelector("#dev-unblock").addEventListener("click", async () => {
+      await db.unblockOutbox();
+      await sync.flush();
+      render();
+    });
     section.querySelector("#dev-clear").addEventListener("click", async () => {
       if (!confirm("Delete all local race data? This cannot be undone.")) return;
       await db.clearAll();
@@ -52,21 +84,31 @@ export default {
     });
 
     async function render() {
-      const outbox = await db.peekOutbox(50);
+      const outbox = await db.allOutbox();
       const { consecutiveFailures, lastDelay, backend } = sync.stats();
       const race = await latestRace();
       raceStatus.value = race ? race.status : "";
+
+      const refreshedAt = await lastRefreshedAt();
+      refreshedLine.textContent = refreshedAt
+        ? `reference data: ${new Date(refreshedAt).toLocaleString()}`
+        : "reference data: never";
+
       const lines = [
+        `signed in    ${api.isSignedIn() ? "yes" : "no"}`,
         `race         ${race ? `${race.number} — ${race.status}` : "none"}`,
-        `backend      ${backend} (${Math.round(fakeBackend.failureRate * 100)}% failure)`,
+        `backend      ${backend}${backend === "fake" ? ` (${Math.round(fakeBackend.failureRate * 100)}% failure)` : ""}`,
         `status       ${sync.status.state}`,
         `pending      ${sync.status.pending}`,
+        `stuck        ${sync.status.blocked || 0}`,
         `failures     ${consecutiveFailures}${lastDelay ? ` (retry in ${lastDelay}ms)` : ""}`,
         `last error   ${sync.status.lastError || "none"}`,
         `backend rows ${fakeBackend.rows.size}`,
         "",
         ...outbox.map(
-          (e) => `#${e.seq} ${e.table} ${e.id.slice(0, 8)} attempts=${e.attempts}`
+          (e) =>
+            `#${e.seq} ${e.blocked ? "STUCK " : ""}${e.table} ${e.id.slice(0, 8)} attempts=${e.attempts}` +
+            (e.blocked ? `\n     ${e.last_error}` : "")
         ),
       ];
       log.textContent = lines.join("\n");
@@ -114,7 +156,7 @@ async function writeTestEvent() {
       ro1_name: null,
       ro2_name: null,
       status: "open",
-      created_at: Date.now(),
+      created_at: db.nowIso(),
     };
     await db.localWrite("race_days", raceDay);
   }
@@ -146,6 +188,6 @@ async function writeTestEvent() {
     type: "dev_test",
     payload: { note: "written from the dev panel" },
     // Tap time, captured on-device — never a server clock.
-    occurred_at: Date.now(),
+    occurred_at: db.nowIso(),
   });
 }

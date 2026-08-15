@@ -7,6 +7,9 @@
 
 import * as db from "./db.js";
 import { sync } from "./sync.js";
+import * as api from "./supabase.js";
+import { supabaseBackend, pullReferenceData } from "./backend.js";
+import { createPinPrompt } from "./pin.js";
 import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
 import { startUpdateWatch, createUpdatePrompt, canPromptNow } from "./update.js";
@@ -24,12 +27,23 @@ const PAGES = { setup, signon, checklist, sequence, live, results, standdown, de
 
 let router;
 let updatePrompt;
+let pinPrompt;
 
 async function boot() {
   await db.openDB();
 
   wireSyncIndicator();
+  // Point sync at the real database. Nothing reaches the network until there
+  // is a session; until then batches simply wait in the outbox.
+  sync.setBackend(supabaseBackend);
   sync.start();
+
+  pinPrompt = createPinPrompt(document.getElementById("pin-dialog"), {
+    onSignedIn: () => {
+      sync.flush();
+      refreshReferenceData();
+    },
+  });
 
   updatePrompt = createUpdatePrompt(document.getElementById("update-bar"));
 
@@ -49,7 +63,33 @@ async function boot() {
 
   await showResumeBanner();
 
+  // Ask for the PIN on a device that has never had one. Not a gate: the
+  // dialog can be dismissed and the whole race day still works.
+  if (!api.isSignedIn()) pinPrompt.open();
+  else refreshReferenceData();
+
+  // Signal came back on the drive home: catch the registers up too.
+  globalThis.addEventListener("online", refreshReferenceData);
+
   startUpdateWatch({ onAvailable: updatePrompt.onAvailable });
+}
+
+/** Pull the registers down whenever there is a session and some signal. */
+async function refreshReferenceData() {
+  if (!api.isSignedIn() || navigator.onLine === false) return;
+  try {
+    const { counts } = await pullReferenceData();
+    console.info("[reference] refreshed", counts);
+  } catch (err) {
+    // Stale reference data is survivable — the last-refreshed stamp is what
+    // tells the OOD how old it is.
+    console.warn("[reference] refresh failed", err.message);
+  }
+}
+
+/** Offer the PIN prompt from anywhere (the dev panel, later the setup page). */
+export function promptForPin() {
+  pinPrompt?.open();
 }
 
 /** Decide whether now is a calm enough moment to offer a new build. */
@@ -71,9 +111,12 @@ function wireSyncIndicator() {
   const pill = document.getElementById("sync-pill");
   const label = document.getElementById("sync-label");
 
-  sync.subscribe(({ state, pending }) => {
+  sync.subscribe(({ state, pending, blocked }) => {
     pill.dataset.state = state;
-    if (state === "offline") {
+    if (blocked) {
+      // Never hide this. Those events are on the phone and nowhere else.
+      label.textContent = `${blocked} stuck${pending ? ` · ${pending} waiting` : ""}`;
+    } else if (state === "offline") {
       label.textContent = pending ? `Offline · ${pending} waiting` : "Offline";
     } else if (state === "error") {
       label.textContent = `Retrying · ${pending} waiting`;

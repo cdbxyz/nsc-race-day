@@ -26,6 +26,14 @@ The beach has unreliable signal, so the app cannot depend on connectivity at the
 
 **D4 — Buildless vanilla JS, ES modules, no framework.** Consistent with the existing calculator's ethos and your iteration style. No bundler, no build step: push to GitHub Pages and it's live. Supabase JS client loaded as an ES module from CDN. The existing scoring engine (lap adjustment, RRS codes, low-point points, tie averaging) is ported into a pure `scoring.js` module and reused verbatim.
 
+> **Amended in Phase 2 — no CDN client.** The Supabase JS client is not used.
+> A CDN import is a cross-origin dependency the service worker cannot precache,
+> so a phone that is offline (or a CDN that is down) fails to boot the app at
+> all — which defeats D1. `js/supabase.js` instead calls the REST and auth
+> endpoints with plain `fetch`: four operations in all (exchange PIN for
+> session, refresh session, upsert, select). Same reasoning as self-hosting the
+> fonts rather than loading them from Google.
+
 **D5 — Shared club PIN, exchanged for a real Supabase session.** No per-user accounts, but the database can't be world-writable either (the anon key ships in public JS). A tiny Supabase Edge Function accepts the club PIN and signs the device into a single shared club account; RLS then permits writes only to authenticated sessions. Entered once per device, remembered thereafter. Public (unauthenticated) reads are allowed only on *published* results — which gives you the members' results page on the website for free.
 
 **D6 — Single-writer model.** One OOD phone runs a race day. This removes all conflict-resolution complexity (last-write-wins is safe). A second device can *view* live state read-only. Multi-recorder support is explicitly out of scope for v1 and the event model doesn't preclude adding it later.

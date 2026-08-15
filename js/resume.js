@@ -49,7 +49,13 @@ export async function findResumePoint() {
   if (!open.length) return null;
 
   // Most recent day wins — created_at breaks ties between two days' dates.
-  open.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.created_at || 0) - (a.created_at || 0));
+  // Both are strings (ISO timestamps sort correctly lexicographically), so
+  // compare them as such rather than subtracting.
+  open.sort(
+    (a, b) =>
+      String(b.date || "").localeCompare(String(a.date || "")) ||
+      String(b.created_at || "").localeCompare(String(a.created_at || ""))
+  );
   const raceDay = open[0];
 
   const races = await db.getAllByIndex("races", "by_race_day", raceDay.id);

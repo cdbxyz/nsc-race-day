@@ -134,6 +134,28 @@
       <div class="actions" style="padding-top:12px">
         <button class="btn" type="button" id="dev-write">Write test event</button>
         <button class="btn ghost" type="button" id="dev-flush">Force flush</button>
+        <button class="btn ghost" type="button" id="dev-unblock">Retry stuck</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Supabase</span></div>
+      <div class="panel-body">
+        <div class="dev-row">
+          <label for="dev-backend">Sync destination</label>
+          <select id="dev-backend">
+            <option value="supabase">supabase (real)</option>
+            <option value="fake">fake (drills)</option>
+          </select>
+        </div>
+      </div>
+      <div class="refresh-line">
+        <span id="dev-refreshed">reference data: never</span>
+        <button class="kill" type="button" id="dev-pull">Refresh</button>
+      </div>
+      <div class="actions" style="padding-top:12px">
+        <button class="btn ghost" type="button" id="dev-signin">Enter club PIN</button>
+        <button class="btn ghost" type="button" id="dev-signout">Sign out</button>
       </div>
     </div>
 
@@ -185,6 +207,27 @@
       </div>
     </div>
   </section>
+
+  <dialog class="pin-dialog" id="pin-dialog" aria-labelledby="pin-title">
+    <form method="dialog" id="pin-form">
+      <div class="eyebrow">Netley Sailing Club</div>
+      <h2 id="pin-title">Club PIN</h2>
+      <p class="pin-blurb">
+        Needed once on this phone, so race records can reach the club database.
+        Racing works without it — everything is saved on the phone either way.
+      </p>
+      <div class="field">
+        <label for="pin-input">PIN</label>
+        <input type="text" id="pin-input" inputmode="numeric" autocomplete="one-time-code"
+               enterkeyhint="go" pattern="[0-9]*" required>
+      </div>
+      <p class="pin-error" id="pin-error" hidden role="alert"></p>
+      <div class="actions">
+        <button class="btn" type="submit" id="pin-submit">Sign in</button>
+        <button class="btn ghost" type="button" id="pin-later">Not now</button>
+      </div>
+    </form>
+  </dialog>
 
   <nav class="foot" aria-label="Pages">
     <a href="#/setup">Setup</a>

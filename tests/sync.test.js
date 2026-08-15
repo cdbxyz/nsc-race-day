@@ -222,3 +222,101 @@ test("concurrent flushes collapse into one", async () => {
   assert.equal(backend.calls.length, 1);
   assert.equal(await db.countOutbox(), 0);
 });
+
+/* ---------------------------------------------------------------------------
+ * Permanently-bad rows.
+ *
+ * Batches go up in order, so a row the server will always refuse would stall
+ * every event tapped after it — an afternoon's racing stuck behind one bad
+ * timestamp. It must be set aside, never dropped.
+ * ------------------------------------------------------------------------ */
+
+function permanent(message = "malformed row") {
+  const err = new Error(message);
+  err.retryable = false;
+  return err;
+}
+
+test("a row the server refuses outright is set aside, not retried forever", async () => {
+  const backend = testBackend();
+  const { sync, timers } = makeSync(backend, { batchSize: 1 });
+  backend.push = async () => {
+    throw permanent("date/time field value out of range");
+  };
+
+  await db.localWrite("race_events", event());
+  await sync.flush();
+
+  assert.equal(await db.countOutbox(), 0, "no longer queued for sending");
+  assert.equal(await db.countBlocked(), 1, "but still on the device");
+  assert.equal(sync.status.blocked, 1);
+  assert.equal(sync.status.state, "error", "the OOD is told, not left guessing");
+  assert.deepEqual(timers.delays(), [], "no point retrying something that cannot work");
+
+  const [entry] = await db.allOutbox();
+  assert.equal(entry.blocked, true);
+  assert.match(entry.last_error, /out of range/);
+});
+
+test("events tapped after a bad row still reach the server", async () => {
+  // The whole point: one malformed race_day must not strand the afternoon.
+  const backend = testBackend();
+  const { sync } = makeSync(backend, { batchSize: 1 });
+
+  const bad = event();
+  const good1 = event();
+  const good2 = event();
+  await db.localWrite("race_events", bad);
+  await db.localWrite("race_events", good1);
+  await db.localWrite("race_events", good2);
+
+  const realPush = backend.push.bind(backend);
+  backend.push = async (batch) => {
+    if (batch.some((e) => e.id === bad.id)) throw permanent();
+    return realPush(batch);
+  };
+
+  await sync.flush();
+
+  assert.equal(await db.countBlocked(), 1);
+  assert.equal(await db.countOutbox(), 0, "everything behind it drained");
+  assert.equal(backend.rows.size, 2);
+  assert.ok(backend.rows.has(`race_events:${good1.id}`));
+  assert.ok(backend.rows.has(`race_events:${good2.id}`));
+});
+
+test("a blocked row can be put back in the queue once fixed", async () => {
+  const backend = testBackend();
+  const { sync } = makeSync(backend, { batchSize: 1 });
+  const realPush = backend.push.bind(backend);
+  let refuse = true;
+  backend.push = async (batch) => {
+    if (refuse) throw permanent();
+    return realPush(batch);
+  };
+
+  await db.localWrite("race_events", event());
+  await sync.flush();
+  assert.equal(await db.countBlocked(), 1);
+
+  refuse = false;
+  await db.unblockOutbox();
+  await sync.flush();
+
+  assert.equal(await db.countBlocked(), 0);
+  assert.equal(await db.countOutbox(), 0);
+  assert.equal(backend.rows.size, 1, "nothing was lost while it sat blocked");
+});
+
+test("an ordinary network failure is still retried, not set aside", async () => {
+  const backend = testBackend();
+  backend.mode = "fail"; // plain Error, no retryable flag
+  const { sync, timers } = makeSync(backend);
+
+  await db.localWrite("race_events", event());
+  await sync.flush();
+
+  assert.equal(await db.countBlocked(), 0, "patchy signal is not a bad row");
+  assert.equal(await db.countOutbox(), 1);
+  assert.deepEqual(timers.delays(), [1000]);
+});
