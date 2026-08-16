@@ -167,11 +167,9 @@ if (typeof document !== "undefined") {
  *        survives the page being re-rendered underneath it.
  */
 export function armedButton(id, { label, armedLabel, classes = "", onConfirm }) {
-  const active = isArmed(id);
-
-  const button = el(`button.btn.${classes}${active ? " armed" : ""}`, {
+  const button = el(`button.btn.${classes}`, {
     type: "button",
-    text: active ? armedLabel : label,
+    text: label,
     "data-arm": id,
     "aria-live": "polite",
     onclick: async () => {
@@ -185,6 +183,31 @@ export function armedButton(id, { label, armedLabel, classes = "", onConfirm }) 
       await onConfirm();
     },
   });
+
+  /* The button keeps its own appearance in step.
+   *
+   * It used to render its armed look once, at construction, and rely on the
+   * page re-rendering to show any change. Pages that do not re-render — the
+   * dev panel, which only rewrites its log text — therefore showed nothing at
+   * all on the first tap: the control was armed but looked identical, so it
+   * read as a dead button and nobody ever tapped it twice.
+   */
+  let painted = false;
+  const paint = () => {
+    // Once it has been in the document and left it, stop listening. Checked
+    // against an explicit false so a node that has never been attached — a
+    // freshly built button, or a test double — keeps its subscription.
+    if (painted && button.isConnected === false) {
+      off();
+      return;
+    }
+    painted = true;
+    const active = isArmed(id);
+    button.textContent = active ? armedLabel : label;
+    button.classList.toggle("armed", active);
+  };
+  const off = onArmChange(paint);
+  paint();
 
   return button;
 }

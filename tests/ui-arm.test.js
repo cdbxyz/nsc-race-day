@@ -20,6 +20,7 @@ class FakeClassList {
   add(...c) { c.forEach((x) => this.set.add(x)); }
   remove(...c) { c.forEach((x) => this.set.delete(x)); }
   contains(c) { return this.set.has(c); }
+  toggle(c, on) { if (on) this.set.add(c); else this.set.delete(c); return !!on; }
   toString() { return [...this.set].join(" "); }
 }
 

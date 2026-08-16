@@ -192,3 +192,62 @@ test("race events cannot be deleted", async () => {
 test("localDelete refuses an unknown table", async () => {
   await assert.rejects(() => db.localDelete("nonsense", "x"), /unknown table/);
 });
+
+/* ---------------------------------------------------------------------------
+ * Wiping the phone
+ *
+ * deleteDatabase does not fail while a connection is open — it waits, fires
+ * onblocked, and never completes. That is indistinguishable from a button
+ * that does nothing, so the connection must be closed FIRST.
+ * ------------------------------------------------------------------------ */
+
+test("the database is closed before it is deleted, so the delete completes", async () => {
+  // Hold an open connection, exactly as the running app does.
+  await db.localWrite("race_events", raceEvent());
+  await db.openDB();
+
+  let blockedReported = false;
+  const result = await db.deleteDatabase({ onBlocked: () => { blockedReported = true; } });
+
+  assert.equal(result.blocked, false, "our own connection must not block us");
+  assert.equal(blockedReported, false);
+});
+
+test("after a wipe the database really is empty, not merely cleared", async () => {
+  await db.localWrite("race_days", {
+    id: db.newId(), date: "2026-08-16", ood_name: "Chris", status: "open", created_at: db.nowIso(),
+  });
+  await db.localWrite("race_events", raceEvent());
+  assert.equal((await db.getAll("race_days")).length, 1);
+
+  await db.deleteDatabase();
+
+  // Reopening recreates the stores from scratch.
+  assert.deepEqual(await db.getAll("race_days"), []);
+  assert.deepEqual(await db.getAll("race_events"), []);
+  assert.equal(await db.countOutbox(), 0);
+});
+
+test("the app works again immediately after a wipe", async () => {
+  await db.localWrite("race_events", raceEvent());
+  await db.deleteDatabase();
+
+  const event = raceEvent();
+  await db.localWrite("race_events", event);
+
+  assert.deepEqual(await db.get("race_events", event.id), event);
+  assert.equal(await db.countOutbox(), 1, "and the outbox starts over too");
+});
+
+test("a wipe leaves no resume point behind", async () => {
+  // The symptom that made the bug visible: a resume banner for a race day
+  // that no longer exists.
+  await db.localWrite("race_days", {
+    id: db.newId(), date: "2026-08-16", ood_name: "Chris", status: "open", created_at: db.nowIso(),
+  });
+  assert.equal((await db.getAllByIndex("race_days", "by_status", "open")).length, 1);
+
+  await db.deleteDatabase();
+
+  assert.deepEqual(await db.getAllByIndex("race_days", "by_status", "open"), []);
+});

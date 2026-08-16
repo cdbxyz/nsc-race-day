@@ -412,6 +412,49 @@ export async function unblockOutbox() {
   await done;
 }
 
+/**
+ * Delete the database outright, rather than emptying its stores.
+ *
+ * The connection is closed FIRST. deleteDatabase does not fail while a
+ * connection is open — it silently waits, firing `onblocked` and never
+ * completing, which looks exactly like a button that does nothing. Closing
+ * ours first removes the usual cause; another tab can still block us, and
+ * that is reported rather than hidden.
+ *
+ * @param {{onBlocked?: () => void, timeoutMs?: number}} options
+ */
+export async function deleteDatabase({ onBlocked = null, timeoutMs = 8000 } = {}) {
+  await closeDB();
+
+  return new Promise((resolve, reject) => {
+    const request = globalThis.indexedDB.deleteDatabase(DB_NAME);
+    let blocked = false;
+
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          blocked
+            ? "Another tab still has the app open. Close it and try again."
+            : "Deleting the database timed out."
+        )
+      );
+    }, timeoutMs);
+
+    request.onblocked = () => {
+      blocked = true;
+      onBlocked?.();
+    };
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      resolve({ blocked });
+    };
+    request.onerror = () => {
+      clearTimeout(timer);
+      reject(request.error ?? new Error("Could not delete the database."));
+    };
+  });
+}
+
 /** Wipe everything. Dev panel only — this destroys race records. */
 export async function clearAll() {
   const db = await openDB();

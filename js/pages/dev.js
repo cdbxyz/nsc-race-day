@@ -77,20 +77,19 @@ export default {
       await sync.flush();
       render();
     });
-    // Replaced with a tap-to-arm button, keeping the id so a second mount
-    // still finds something to replace.
+    /* Wiping the phone is the most destructive thing in the app, so it says
+       what it is doing at every step and never fails silently. */
+    const wipeStatus = el("p.stub", { text: "" });
     const replacement = armedButton("dev.clear", {
       label: "Clear all local data",
-      armedLabel: "Tap again to delete everything",
+      armedLabel: "TAP AGAIN TO WIPE THIS PHONE",
       classes: "danger",
-      onConfirm: async () => {
-        await db.clearAll();
-        await sync.refreshStatus();
-        render();
-      },
+      onConfirm: () => wipeThisPhone((text) => { wipeStatus.textContent = text; }),
     });
     replacement.id = "dev-clear";
-    section.querySelector("#dev-clear").replaceWith(replacement);
+    const target = section.querySelector("#dev-clear");
+    target.replaceWith(replacement);
+    replacement.after(wipeStatus);
 
     async function render() {
       const outbox = await db.allOutbox();
@@ -139,6 +138,43 @@ export default {
     stopWatching = null;
   },
 };
+
+/**
+ * Wipe this phone back to a fresh install.
+ *
+ * Order matters. Sync is stopped first so nothing writes during the delete;
+ * the session goes next so a reload cannot come back signed in; the database
+ * is closed before it is deleted, because deleteDatabase waits silently on an
+ * open connection; and only then does the app reload, so it boots genuinely
+ * empty rather than showing a resume banner for a race day that no longer
+ * exists.
+ */
+async function wipeThisPhone(setStatus) {
+  try {
+    setStatus("Stopping sync…");
+    sync.stop();
+
+    setStatus("Signing out…");
+    api.signOut();
+    // Anything else this app has parked in localStorage goes too.
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("nsc-race-day.")) localStorage.removeItem(key);
+    }
+
+    setStatus("Deleting the database…");
+    const { blocked } = await db.deleteDatabase({
+      onBlocked: () => setStatus("Waiting for another tab to close the app…"),
+    });
+
+    setStatus(blocked ? "Deleted. Reloading…" : "Wiped. Reloading…");
+    // Hard reload: every page module holds state that is now meaningless.
+    setTimeout(() => globalThis.location.reload(), 400);
+  } catch (err) {
+    // Never silent. If the wipe failed, say so and leave the data alone.
+    setStatus(`Could not wipe: ${err.message}`);
+    console.error("wipe failed", err);
+  }
+}
 
 /** The most recent race of the open day, if there is one. */
 async function latestRace() {
