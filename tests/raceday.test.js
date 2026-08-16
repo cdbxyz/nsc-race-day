@@ -104,3 +104,32 @@ test("a passed-in race is honoured", async () => {
 test("an entry that has already gone does not throw a confusing error", async () => {
   await assert.rejects(() => removeEntry(db.newId()), /already started/);
 });
+
+/* ---------------------------------------------------------------------------
+ * Duty roles
+ *
+ * OOD runs the race; RO1 and RO2 crew the rescue boat. They are RESCUE
+ * officers — "Race Officer" is wrong and was on the setup form for a while.
+ * Accountability for a race day rests on these three names being recorded and
+ * shown back, so the compact form is pinned here.
+ * ------------------------------------------------------------------------ */
+
+test("the duty line names all three roles compactly", async () => {
+  const { dutyLine } = await import("../js/pages/setup.js");
+  assert.equal(
+    dutyLine({ ood_name: "Chris", ro1_name: "Sam", ro2_name: "Alex" }),
+    "OOD Chris · RO1 Sam · RO2 Alex"
+  );
+});
+
+test("rescue officers are omitted when nobody was recorded", async () => {
+  const { dutyLine } = await import("../js/pages/setup.js");
+  assert.equal(dutyLine({ ood_name: "Chris", ro1_name: null, ro2_name: null }), "OOD Chris");
+  assert.equal(dutyLine({ ood_name: "Chris", ro1_name: "Sam" }), "OOD Chris · RO1 Sam");
+});
+
+test("the duty line never says Race Officer", async () => {
+  const { dutyLine } = await import("../js/pages/setup.js");
+  const line = dutyLine({ ood_name: "Chris", ro1_name: "Sam", ro2_name: "Alex" });
+  assert.ok(!/race officer/i.test(line));
+});

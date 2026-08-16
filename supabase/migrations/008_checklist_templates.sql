@@ -17,7 +17,7 @@ insert into checklist_templates (id, kind, items) values
     {"id": "rescue_kit",     "label": "Rescue boat kit aboard — knife, throw line, anchor"},
     {"id": "first_aid",      "label": "First aid kit aboard and in date"},
     {"id": "radios",         "label": "Radios checked on both boats"},
-    {"id": "crew_briefed",   "label": "Safety crew briefed and wearing lifejackets"},
+    {"id": "crew_briefed",   "label": "Rescue crew (RO1 and RO2) briefed and wearing lifejackets"},
     {"id": "flags",          "label": "Flags ready — class, P, AP, first substitute"},
     {"id": "horn",           "label": "Horn or klaxon tested"},
     {"id": "tide_weather",   "label": "Tide and forecast noted, wind within limits"},

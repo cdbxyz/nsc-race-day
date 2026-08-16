@@ -16,6 +16,7 @@ import { resultInputs, correctionFor, raceLabel, raceName } from "./../state.js"
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
 import { savePdf } from "./../pdf.js";
 import { navigate } from "./../router.js";
+import { dutyLine } from "./setup.js";
 
 let host = null;
 let context = null;
@@ -119,7 +120,7 @@ function headerPanel() {
 
   const header = el("div.raceline", {}, [
     el("div.raceline-main", {}, [
-      el("div.eyebrow", { text: `${raceDay.date} · OOD ${raceDay.ood_name}` }),
+      el("div.eyebrow", { text: `${raceDay.date} · ${dutyLine(raceDay)}` }),
       el("div.raceline-title", { text: raceLabel(race) }),
       el("div.regmeta", {
         text: [series ? `${series.name} ${series.season}` : null, published ? "Published" : "Provisional"]
@@ -350,7 +351,7 @@ function exportPanel() {
   const meta = [
     `${raceDay.date}`,
     series ? `${series.name} ${series.season}` : null,
-    `OOD ${raceDay.ood_name}`,
+    dutyLine(raceDay),
     `Max laps ${context.results.maxLaps}`,
     `${context.results.starters} starters`,
   ]

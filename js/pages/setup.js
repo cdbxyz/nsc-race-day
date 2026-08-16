@@ -47,8 +47,14 @@ async function render() {
   const suggestionsId = "officer-names";
   const date = field("Date", { type: "date", value: today() });
   const ood = field("Officer of the Day", { class: "text", list: suggestionsId, autocomplete: "off" });
-  const ro1 = field("Race Officer 1", { class: "text", list: suggestionsId, autocomplete: "off" });
-  const ro2 = field("Race Officer 2", { class: "text", list: suggestionsId, autocomplete: "off" });
+  /* The duty trio: the OOD runs the race; RO1 and RO2 crew the rescue boat.
+     They are "Rescue" officers, never "Race" officers. */
+  const ro1 = field("Rescue Officer 1 (RO1)", {
+    class: "text", list: suggestionsId, autocomplete: "off", placeholder: "Rescue boat crew",
+  });
+  const ro2 = field("Rescue Officer 2 (RO2)", {
+    class: "text", list: suggestionsId, autocomplete: "off", placeholder: "Rescue boat crew",
+  });
   // One race by default: most days are one, and adding another is a tap.
   const races = field("Races planned", { type: "number", min: 1, max: 10, value: 1, inputMode: "numeric" });
   const raceName = field("Race name (optional)", {
@@ -171,7 +177,8 @@ async function alreadyOpenPanel(day) {
       "Race day in progress",
       [
         el("div.panel-body", {}, [
-          el("div.regname", { text: `${day.date} · OOD ${day.ood_name}` }),
+          el("div.regname", { text: day.date }),
+          el("div.regmeta", { text: dutyLine(day) }),
           el("p.stub", { text: "A day stays open until stand-down. Carry on where you left off." }),
         ]),
         list,
@@ -212,6 +219,17 @@ function renameRace(race) {
   );
   clear(host).append(panel(raceLabel(race), [body]));
   name.input.focus();
+}
+
+/** "OOD Chris · RO1 Sam · RO2 Alex" — compact form, names omitted if unset. */
+export function dutyLine(day) {
+  return [
+    day?.ood_name ? `OOD ${day.ood_name}` : null,
+    day?.ro1_name ? `RO1 ${day.ro1_name}` : null,
+    day?.ro2_name ? `RO2 ${day.ro2_name}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function registersLink() {

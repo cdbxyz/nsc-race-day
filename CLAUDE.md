@@ -11,6 +11,12 @@ Hard rules:
   digits. Service-role keys and database passwords live in the Supabase
   environment and are read from there, never written down. The pre-commit
   hook runs `tools/scan-secrets.mjs` and will refuse the commit.
+- Duty roles: **OOD** = Officer of the Day, who runs the race. **RO1** and
+  **RO2** = **Rescue Officers** 1 and 2, who crew the rescue boat. Never
+  "Race Officer" — they are rescue crew, not race management. Display as
+  "Rescue Officer 1 (RO1)" where there is room and "RO1" where compact
+  (headers, PDF, CSV). The `ro1_name` / `ro2_name` columns and `ro1Name` /
+  `ro2Name` identifiers are already correct and are not to be renamed.
 - The club is **Nefyn Sailing Club (never Netley)**. NSC expands to Nefyn
   Sailing Club everywhere it appears — UI copy, page titles, the PWA manifest,
   PDF and print headers, CSV exports. Check this whenever you write club-facing

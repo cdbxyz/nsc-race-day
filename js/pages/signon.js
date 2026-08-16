@@ -14,6 +14,7 @@ import * as rd from "./../raceday.js";
 import * as reg from "./../registers.js";
 import { factorFor } from "./../handicap.js";
 import { raceLabel } from "./../state.js";
+import { dutyLine } from "./setup.js";
 import { navigate } from "./../router.js";
 
 let host = null;
@@ -121,7 +122,7 @@ function headerPanel(data) {
   const { raceDay, race, series } = data;
   return el("div.raceline", {}, [
     el("div.raceline-main", {}, [
-      el("div.eyebrow", { text: `${raceDay.date} · OOD ${raceDay.ood_name}` }),
+      el("div.eyebrow", { text: `${raceDay.date} · ${dutyLine(raceDay)}` }),
       el("div.raceline-title", { text: raceLabel(race) }),
       el("div.regmeta", {
         text: [
