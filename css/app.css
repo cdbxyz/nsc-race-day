@@ -660,3 +660,13 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 /* A lowered flag is NOT an upside-down flag. Rotating the artwork would be a
    false picture of what is on the flagpole, so the stage is carried by the
    caption ("P DOWN · 1:00") and the strip's own highlighting instead. */
+
+/* ---- a disabled action always says why ---- */
+.whydisabled{
+  margin:6px 2px 0;font-size:.78rem;line-height:1.35;color:var(--slate);
+}
+/* A time that cannot be right is loud, never quietly absent. */
+.brokenlist{
+  margin:6px 0 10px;padding-left:18px;font-size:.82rem;line-height:1.45;color:var(--flag);
+}
+.card.broken{border-left:4px solid var(--flag);background:#FFF5F6}

@@ -152,6 +152,28 @@ export function scaledNow({ anchor, now, speed = 1 }) {
 }
 
 /**
+ * The exact inverse of scaledNow: given an instant on the compressed clock,
+ * the wall-clock instant it actually happens at.
+ *
+ * This is what makes a recorded gun time honest. The countdown works on the
+ * scaled clock, so the moment it calls zero is a SCALED instant — at 60x, ten
+ * scaled minutes after the tap is ten real SECONDS after it. Writing the
+ * scaled instant into races.start_at, as the old code did, put the gun ten
+ * real minutes in the future and made every elapsed time negative until the
+ * wall clock caught up.
+ *
+ * Computed rather than read off Date.now() at the moment of detection, so a
+ * phone asleep through the gun still records the gun to the millisecond.
+ *
+ * @param {{anchor: number|null, scaled: number|null, speed?: number}} args
+ */
+export function wallClockAt({ anchor, scaled, speed = 1 }) {
+  if (anchor == null || scaled == null) return scaled ?? null;
+  if (!Number.isFinite(speed) || speed <= 0 || speed === 1) return scaled;
+  return anchor + (scaled - anchor) / speed;
+}
+
+/**
  * Whether a mark has just been crossed, for the vibration pulse.
  * Compares two readings rather than watching a timer, so a sleeping phone
  * cannot miss one and a slow frame cannot fire one twice.
@@ -282,7 +304,14 @@ export function nextAction(boat) {
  * @returns {{entryId, lapsDone, lapsPlanned, onLap, lastLapAt, finished,
  *            finishedAt, elapsedMs, code, action}}
  */
-export function boatState(entry, events, { plan, startAt = null }) {
+/**
+ * @param {{plan: object, startAt?: number|null, speed?: number}} options
+ *   `speed` compresses the DURATIONS this returns for display — the live
+ *   race clock and lap splits — exactly as scaledNow compresses the
+ *   countdown. It defaults to 1 and resultInputs never passes it, so the
+ *   results sheet is always computed from real elapsed time.
+ */
+export function boatState(entry, events, { plan, startAt = null, speed = 1 }) {
   const live = liveEvents(events).filter((e) => e.entry_id === entry.id);
 
   const laps = live.filter((e) => e.type === "lap_recorded");
@@ -296,15 +325,22 @@ export function boatState(entry, events, { plan, startAt = null }) {
 
   /* Each crossing as elapsed race time, in order. Display only — the events
      themselves keep their absolute occurred_at, which is what the results
-     maths and the audit log depend on. */
+     maths and the audit log depend on.
+
+     `speed` rides on the same arithmetic rather than a branch of its own: an
+     elapsed duration scaled by the fast clock is just the scaled instant
+     measured from the same start. One code path, as with the countdown. */
+  const elapsedAt = (isoOrNull) => {
+    if (startAt == null || isoOrNull == null) return null;
+    return scaledNow({ anchor: startAt, now: ms(isoOrNull), speed }) - startAt;
+  };
+
   const splits = [
     ...laps.map((event, index) => ({
       label: `L${index + 1}`,
-      ms: startAt == null ? null : ms(event.occurred_at) - startAt,
+      ms: elapsedAt(event.occurred_at),
     })),
-    ...(finish
-      ? [{ label: "F", ms: startAt == null ? null : ms(finish.occurred_at) - startAt }]
-      : []),
+    ...(finish ? [{ label: "F", ms: elapsedAt(finish.occurred_at) }] : []),
   ];
 
   const boat = {
@@ -316,8 +352,9 @@ export function boatState(entry, events, { plan, startAt = null }) {
     onLap: Math.min(lapsDone + (finish ? 0 : 1), Math.max(lapsPlanned, lapsDone)),
     lastLapAt: lastEvent ? ms(lastEvent.occurred_at) : null,
     finished: Boolean(finish),
+    // The absolute instant stays real; only the duration is ever compressed.
     finishedAt,
-    elapsedMs: finishedAt != null && startAt != null ? finishedAt - startAt : null,
+    elapsedMs: finish ? elapsedAt(finish.occurred_at) : null,
     code: coded?.payload?.code ?? null,
   };
   boat.action = nextAction(boat);
@@ -332,7 +369,7 @@ export function boatState(entry, events, { plan, startAt = null }) {
  * The complete live-race picture. This is the only thing the live page reads,
  * so what it renders is by construction a pure function of the log.
  */
-export function raceState({ race, entries = [], events = [] }) {
+export function raceState({ race, entries = [], events = [], speed = 1 }) {
   const live = liveEvents(events);
   const abandoned = live.some((e) => e.type === "race_abandoned");
 
@@ -344,12 +381,17 @@ export function raceState({ race, entries = [], events = [] }) {
   const sequence = sequenceState(events);
   const plan = lapPlan(race, events);
 
-  // start_at is the recorded gun time; fall back to the computed one so the
-  // page is right the instant the countdown hits zero, before the write lands.
-  const startAt = ms(race?.start_at) ?? sequence.startAt ?? null;
+  /* start_at is the recorded gun time; fall back to the computed one so the
+     page is right the instant the countdown hits zero, before the write
+     lands. The fallback must be converted back to wall clock for the same
+     reason the write is: sequence.startAt sits on the countdown's clock. */
+  const startAt =
+    ms(race?.start_at) ??
+    wallClockAt({ anchor: sequence.startedAt, scaled: sequence.startAt, speed }) ??
+    null;
 
   const boats = entries.map((entry) => {
-    const boat = { entry, ...boatState(entry, events, { plan, startAt }) };
+    const boat = { entry, ...boatState(entry, events, { plan, startAt, speed }) };
     // Once the race is over, nothing more can be tapped onto a boat.
     if (ended) boat.action = null;
     return boat;
@@ -409,6 +451,10 @@ export function resultInputs({ race, entries = [], events = [] }) {
   const plan = lapPlan(race, events);
   const startAt = ms(race?.start_at) ?? sequenceState(events).startAt ?? null;
 
+  /* Deliberately no `speed`: the results sheet is computed from real stored
+     timestamps, always. A race run on the dev fast clock therefore produces
+     genuinely short elapsed times that will not match the compressed clock
+     the OOD watched — which is correct, because the log is what happened. */
   return entries.map((entry) => {
     const boat = boatState(entry, events, { plan, startAt });
     const fix = correctionFor(entry.id, events);
@@ -432,8 +478,44 @@ export function resultInputs({ race, entries = [], events = [] }) {
       laps,
       code: code || "",
       corrected: Boolean(fix),
+      implausible: implausibleElapsed({
+        elapsedSeconds,
+        code,
+        // A hand-entered correction is a time to be judged too, even on a
+        // boat the log never saw finish.
+        finished: boat.finished || fix?.elapsed_seconds != null,
+      }),
     };
   });
+}
+
+/**
+ * The longest a race at this club could conceivably take. Beyond this the
+ * number is not a slow boat, it is broken arithmetic.
+ */
+export const MAX_PLAUSIBLE_ELAPSED_SECONDS = 12 * 3600;
+
+/**
+ * Why an elapsed time cannot be believed, or null if it can.
+ *
+ * A boat with a bad time must never just vanish from the order. scoring.js
+ * quite reasonably refuses to score `elapsed <= 0`, and the effect of the
+ * start_at bug was that EVERY boat hit that branch and the sheet came up
+ * empty with nothing saying why. A time that cannot be right has to be
+ * visible, and visibly different from an ordinary retirement.
+ */
+export function implausibleElapsed({ elapsedSeconds, code = "", finished = true }) {
+  if (code) return null; // a coded boat has no time to be wrong about
+  if (!finished) return null; // still out there, or never started
+  if (!Number.isFinite(elapsedSeconds)) return "elapsed time is not a number";
+  if (elapsedSeconds < 0) {
+    return "finished before the start — the recorded start time must be wrong";
+  }
+  if (elapsedSeconds === 0) return "no time between the start and the finish";
+  if (elapsedSeconds > MAX_PLAUSIBLE_ELAPSED_SECONDS) {
+    return `elapsed time of ${Math.round(elapsedSeconds / 3600)} hours cannot be right`;
+  }
+  return null;
 }
 
 /**

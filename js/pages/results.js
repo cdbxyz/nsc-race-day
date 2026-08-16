@@ -8,11 +8,13 @@
  * freezes the race, makes it publicly readable and feeds helm_season_wins.
  */
 
-import { el, clear, panel, notice, field, selectField } from "./../ui.js";
+import { el, clear, panel, notice, field, selectField, actionWithReason } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { resultInputs, correctionFor, raceLabel, raceName, entryLabel, entryDetail } from "./../state.js";
+import {
+  resultInputs, correctionFor, raceLabel, raceName, entryLabel, entryDetail, liveEvents,
+} from "./../state.js";
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
 import { savePdf } from "./../pdf.js";
 import { COMPASS, FORCES, windText, windShort } from "./../wind.js";
@@ -88,6 +90,9 @@ async function load() {
     events,
     entries,
     inputs,
+    // Ended is an event, not a status column: undoing the ending puts the
+    // race back to live, and publish has to follow that.
+    ended: liveEvents(events).some((e) => e.type === "race_ended"),
     results: scoreRace(inputs),
   };
   return context;
@@ -170,9 +175,31 @@ function testDataBanner() {
 /* ---- the sheet ---------------------------------------------------------- */
 
 function resultsPanel() {
-  const { results, race } = context;
+  const { results, race, inputs } = context;
   const editable = race.status !== "published";
   const cards = el("div.cards");
+  const parts = [];
+
+  /* A boat whose time cannot be right must be loud, not absent. scoring.js
+     correctly refuses to score it, which without this banner means it slides
+     into the "out" list looking like an ordinary retirement — and if every
+     boat is affected, an empty sheet with no explanation at all. */
+  const broken = inputs.filter((row) => row.implausible);
+  if (broken.length) {
+    parts.push(
+      notice(
+        broken.length === inputs.length
+          ? `No boat on this sheet has a believable time — ${broken[0].implausible}. This is a recording fault, not a race result: check the start time before correcting anything.`
+          : `${broken.length} boat${broken.length === 1 ? "" : "s"} ${broken.length === 1 ? "has" : "have"} a time that cannot be right and ${broken.length === 1 ? "is" : "are"} not scored. Correct ${broken.length === 1 ? "it" : "them"} below.`,
+        "error"
+      )
+    );
+    const list = el("ul.brokenlist");
+    for (const row of broken) {
+      list.append(el("li", { text: `${row.name} — ${row.implausible}` }));
+    }
+    parts.push(list);
+  }
 
   for (const row of results.scored) {
     cards.append(resultCard(row, editable, false));
@@ -185,7 +212,8 @@ function resultsPanel() {
     cards.append(el("div.empty", {}, [el("p", { text: "No boats to score." })]));
   }
 
-  return panel("Results", [cards, footnote()], {
+  parts.push(cards, footnote());
+  return panel("Results", parts, {
     count: `${results.scored.length} scored`,
   });
 }
@@ -197,7 +225,7 @@ function resultCard(row, editable, isOut) {
     row.klass,
     row.sailNo || null,
     pyText(row),
-    isOut ? row.reason : `${row.laps} lap${row.laps === 1 ? "" : "s"}`,
+    isOut ? (input?.implausible ?? row.reason) : `${row.laps} lap${row.laps === 1 ? "" : "s"}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -217,7 +245,10 @@ function resultCard(row, editable, isOut) {
         el("span.gaptxt", { text: gapText(row.gap) }),
       ]);
 
-  const card = el(`div.card${isOut ? ".out" : ""}${row.place === 1 && !isOut ? ".lead" : ""}`, {}, [
+  const card = el(
+    `div.card${isOut ? ".out" : ""}${input?.implausible ? ".broken" : ""}${row.place === 1 && !isOut ? ".lead" : ""}`,
+    {},
+    [
     el("div.cpos", { text: isOut ? row.code || "—" : placeText(row) }),
     el("div.cwho", {}, [
       el("div.cboat", { text: row.name }),
@@ -226,7 +257,8 @@ function resultCard(row, editable, isOut) {
     ]),
     times,
     gap,
-  ]);
+    ]
+  );
 
   if (editable) {
     card.append(
@@ -546,7 +578,6 @@ function publishPanel() {
   const publish = el("button.btn", {
     type: "button",
     text: "Publish results",
-    disabled: !results.scored.length,
     onclick: async () => {
       publish.disabled = true;
       await doPublish();
@@ -559,8 +590,35 @@ function publishPanel() {
         text: "Publishing freezes the race, makes it readable on the club website, and feeds the winner's season handicap. Make any corrections first.",
       }),
     ]),
-    el("div.actions", {}, [publish]),
+    actionWithReason(publish, whyCannotPublish()),
   ]);
+}
+
+/**
+ * One sentence saying why publishing is unavailable, or null when it is.
+ *
+ * Ordered so the most actionable cause wins. "Nothing scored" is the last
+ * resort, because on its own it tells an OOD nothing they can do about it.
+ */
+function whyCannotPublish() {
+  const { race, results, inputs, ended } = context;
+
+  if (race.status === "published") return "Already published.";
+  if (!ended) {
+    return "The race has not been ended yet — end it on the live race page first.";
+  }
+
+  const broken = inputs.filter((r) => r.implausible);
+  if (broken.length && !results.scored.length) {
+    return `No boat has a usable time: ${broken[0].implausible}. Correct the times above before publishing.`;
+  }
+  if (!results.scored.length) {
+    const outCount = results.out.length;
+    return outCount
+      ? `No boat scored — all ${outCount} are retired, disqualified or without a time.`
+      : "No boats have finished, so there is nothing to publish.";
+  }
+  return null;
 }
 
 async function doPublish() {

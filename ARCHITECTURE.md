@@ -24,6 +24,10 @@ The beach has unreliable signal, so the app cannot depend on connectivity at the
 
 **D3 — Timestamps captured at tap time, on-device.** An event's time is `Date.now()` at the moment of the tap, stored in the event itself. Sync delay never corrupts race times. The countdown timer is *computed* from a stored `sequence_start_at` timestamp versus the wall clock — never a running JS interval — so a phone that sleeps for four minutes wakes up showing the correct remaining time.
 
+`start_at` is the wall-clock instant the countdown crossed zero — **not** `sequence_start_at + 10 minutes`. Those coincide only at 1× with no general recall, and the dev fast clock breaks the coincidence: at 60× the sequence really takes ten seconds, so the projected value lands ten real minutes in the future and every elapsed time computed from it comes out negative. The gun is derived with `wallClockAt()`, the exact inverse of `scaledNow()`, so it stays exact to the millisecond even if the phone sleeps straight through the crossing.
+
+The dev fast clock covers the whole race, not just the sequence. It works by scaling the instants handed to the ordinary pure functions — `countdown()`, `raceClock()`, `boatState()` — never by branching, so what is tested is what ships. Only *display* durations are ever compressed: `resultInputs()` takes no speed argument at all, so the results sheet is always computed from real stored timestamps. A 60× race therefore produces genuinely short elapsed times that will not match the clock the OOD watched, and the day carries `is_test_data` to say so.
+
 **D4 — Buildless vanilla JS, ES modules, no framework.** Consistent with the existing calculator's ethos and your iteration style. No bundler, no build step: push to GitHub Pages and it's live. Supabase JS client loaded as an ES module from CDN. The existing scoring engine (lap adjustment, RRS codes, low-point points, tie averaging) is ported into a pure `scoring.js` module and reused verbatim.
 
 > **Amended in Phase 2 — no CDN client.** The Supabase JS client is not used.
@@ -133,7 +137,7 @@ create table races (
   status text not null default 'setup',
   -- setup | prestart | sequence | racing | finished | published | abandoned
   sequence_start_at timestamptz,   -- when 10-min gun fired
-  start_at timestamptz,            -- computed: sequence_start_at + 10 min
+  start_at timestamptz,            -- the wall-clock moment the countdown crossed zero
   fast_laps int not null default 3,          -- lap plan, fast fleet (base PY < 1168)
   slow_laps int not null default 2,          -- lap plan, slow fleet (base PY >= 1168)
   published_at timestamptz         -- shorten-course updates fast_laps/slow_laps via event

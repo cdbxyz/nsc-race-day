@@ -92,6 +92,34 @@ export function datalist(id, values) {
   return el("datalist", { id }, values.map((v) => el("option", { value: v })));
 }
 
+/**
+ * A primary action that says why it cannot be used.
+ *
+ * A greyed-out button with no explanation is a dead end: on a beach, with the
+ * fleet waiting, "Publish results" being unavailable and silent is worse than
+ * useless, because the OOD cannot tell whether the app is broken or whether
+ * they have missed a step. Every disabled primary action in this flow is
+ * required to give a reason.
+ *
+ * `reason` is the sentence shown when the action is unavailable; null means
+ * it is available.
+ *
+ * @param {HTMLElement} button
+ * @param {string|null} reason
+ */
+export function actionWithReason(button, reason) {
+  button.disabled = Boolean(reason);
+  const wrap = el("div.actions", {}, [button]);
+  if (!reason) return wrap;
+
+  // Tied to the button, because a sighted user sees the greying and a screen
+  // reader user would otherwise get nothing at all.
+  const id = `why-${Math.random().toString(36).slice(2, 9)}`;
+  wrap.append(el("p.whydisabled", { id, text: reason, role: "status" }));
+  button.setAttribute("aria-describedby", id);
+  return wrap;
+}
+
 /* ---------------------------------------------------------------------------
  * Tap to arm
  *

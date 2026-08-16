@@ -10,7 +10,7 @@
  * plain warning if anything has not reached the club database.
  */
 
-import { el, clear, panel, notice } from "./../ui.js";
+import { el, clear, panel, notice, actionWithReason } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -305,7 +305,6 @@ function completePanel() {
   const complete = el("button.btn", {
     type: "button",
     text: "Close the race day",
-    disabled: blocked,
     onclick: async () => {
       complete.disabled = true;
       complete.textContent = "Closing…";
@@ -313,7 +312,11 @@ function completePanel() {
     },
   });
 
-  return panel("Finish", [body, el("div.actions", {}, [complete])]);
+  const why = blocked
+    ? `${unaccounted.length} boat${unaccounted.length === 1 ? "" : "s"} still unaccounted for — every boat must be ashore or coded before the day can be closed.`
+    : null;
+
+  return panel("Finish", [body, actionWithReason(complete, why)]);
 }
 
 async function closeDay() {

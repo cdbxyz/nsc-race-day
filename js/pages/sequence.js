@@ -12,7 +12,9 @@ import { el, clear, panel, notice, field, selectField, armedButton, onArmChange 
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { sequenceState, countdown, marksCrossed, raceLabel, scaledNow, SEQUENCE_MS } from "./../state.js";
+import {
+  sequenceState, countdown, marksCrossed, raceLabel, scaledNow, wallClockAt, SEQUENCE_MS,
+} from "./../state.js";
 import { sequenceSpeed, isFastClock, onSpeedChange } from "./../devclock.js";
 import { COMPASS, FORCES, windText } from "./../wind.js";
 import { PURSUIT_CALCULATOR_URL } from "./../calendar.js";
@@ -96,7 +98,7 @@ function tick() {
 
   if (clock.started && !handedOver) {
     handedOver = true;
-    startRacing(context.race, sequence.startAt);
+    startRacing(context.race, sequence, sequenceSpeed());
     return;
   }
 
@@ -151,7 +153,7 @@ function render() {
 
   if (clock.started && !handedOver) {
     handedOver = true;
-    startRacing(race, sequence.startAt);
+    startRacing(race, sequence, sequenceSpeed());
     return;
   }
 
@@ -349,13 +351,31 @@ function testClockNotice() {
   );
 }
 
-/** At zero: record the gun and hand over to the live race page. */
-async function startRacing(race, startAt) {
+/**
+ * At zero: record the gun and hand over to the live race page.
+ *
+ * `sequence` carries both instants this needs and they are NOT the same
+ * thing. `startAt` is the gun on the countdown's own clock, which may be
+ * compressed; `startedAt` is the real moment the sequence was armed. The gun
+ * that goes into the database has to be a wall-clock instant, because every
+ * occurred_at it will later be subtracted from is one.
+ *
+ * sequence_start_at is the arming moment itself rather than "the gun minus
+ * ten minutes". Those coincide only at 1x with no general recall, and relying
+ * on a coincidence is how the original bug survived.
+ */
+async function startRacing(race, sequence, speed) {
+  const gunAt = wallClockAt({
+    anchor: sequence.startedAt,
+    scaled: sequence.startAt,
+    speed,
+  });
+
   try {
     await rd.setRaceStatusIfEarlier(race, "racing", {
       status: "racing",
-      start_at: new Date(startAt).toISOString(),
-      sequence_start_at: new Date(startAt - 10 * 60 * 1000).toISOString(),
+      start_at: new Date(gunAt).toISOString(),
+      sequence_start_at: new Date(sequence.startedAt).toISOString(),
     });
   } catch (err) {
     console.error("could not record the start", err);

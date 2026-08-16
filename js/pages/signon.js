@@ -10,6 +10,7 @@
 
 import {
   el, clear, field, selectField, panel, notice, armedButton, onArmChange, pickerField,
+  actionWithReason,
 } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
@@ -559,13 +560,20 @@ function entriesPanel(data) {
   const next = el("button.btn", {
     type: "button",
     text: "Pre-race checklist →",
-    disabled: !sorted.length,
     onclick: () => navigate("checklist"),
   });
 
-  return panel("Signed on", [list, el("div.actions", {}, [next])], {
-    count: `${sorted.length}`,
-  });
+  return panel(
+    "Signed on",
+    [
+      list,
+      actionWithReason(
+        next,
+        sorted.length ? null : "Sign at least one boat on before starting the checklist."
+      ),
+    ],
+    { count: `${sorted.length}` }
+  );
 }
 
 function entryCard(data, entry) {

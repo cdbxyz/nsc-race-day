@@ -24,7 +24,9 @@ import {
   entryDetail,
   liveEvents,
   lastUndoable,
+  scaledNow,
 } from "./../state.js";
+import { sequenceSpeed, isFastClock } from "./../devclock.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
 import { navigate } from "./../router.js";
 
@@ -84,7 +86,11 @@ async function load() {
     boatById: new Map(boats.map((b) => [b.id, b])),
     helmById: new Map(members.map((h) => [h.id, h])),
     classById: new Map(classes.map((c) => [c.id, c])),
-    state: raceState({ race, entries, events }),
+    /* The fast clock runs the whole race, not just the sequence: the same
+       multiplier that compressed the countdown compresses the race clock,
+       the lap splits and the finished rail. Nothing here is a second code
+       path — raceState is handed a speed exactly as countdown() was. */
+    state: raceState({ race, entries, events, speed: sequenceSpeed() }),
   };
   return context;
 }
@@ -94,12 +100,27 @@ async function reload() {
   render();
 }
 
+/* Wall-clock instant -> the instant the race clock should show. Both the
+   running clock and the frozen ending go through this, so a race that ends
+   on the fast clock freezes at the time the OOD actually watched. */
+function onRaceClock(state, instant) {
+  if (instant == null) return null;
+  return scaledNow({ anchor: state.startAt, now: instant, speed: sequenceSpeed() });
+}
+
+function raceClockText(state) {
+  return (
+    raceClock(state.startAt, onRaceClock(state, Date.now()), onRaceClock(state, state.endedAt)) ??
+    "—"
+  );
+}
+
 function updateClock() {
   if (!context || !host) return;
   const { state } = context;
   if (state.ended) return; // frozen at the ending
   const node = host.querySelector("#race-clock");
-  if (node) node.textContent = raceClock(state.startAt, Date.now(), state.endedAt) ?? "—";
+  if (node) node.textContent = raceClockText(state);
 }
 
 /* ---- render ------------------------------------------------------------- */
@@ -132,6 +153,17 @@ function render() {
       notice("TEST DATA — this race was started on the dev fast clock.", "error")
     );
   }
+  /* Said plainly while it is happening, because the clock on this page and
+     the times on the results sheet will not agree: what is stored is real
+     wall clock, and only the display is compressed. */
+  if (isFastClock()) {
+    node.append(
+      notice(
+        `Fast clock ${sequenceSpeed()}× — this clock and the lap splits are compressed. Stored times are real, so the results sheet will show the true (short) elapsed times.`,
+        "error"
+      )
+    );
+  }
   node.append(clockBar(state));
   if (state.ended) node.append(endedPanel(state));
   if (state.done.length) node.append(finishedRail(state));
@@ -160,15 +192,23 @@ function clockBar(state) {
       el("div.raceclock", {
         id: "race-clock",
         class: state.ended ? "frozen" : "",
-        text: raceClock(state.startAt, Date.now(), state.endedAt) ?? "—",
+        text: raceClockText(state),
       }),
     ]),
-    el("button.kill.undoall", {
-      type: "button",
-      text: "Undo",
-      disabled: !lastUndoable(context.events),
-      onclick: () => undoLast(),
-    }),
+    /* Undo is compact chrome in the clock bar with no room for a sentence
+       beneath it, so the reason goes in the label and the tooltip instead —
+       the rule is that a disabled control explains itself, not that it must
+       do so in one particular shape. */
+    (() => {
+      const can = lastUndoable(context.events);
+      return el("button.kill.undoall", {
+        type: "button",
+        text: can ? "Undo" : "Nothing to undo",
+        disabled: !can,
+        title: can ? "Undo the last action" : "Nothing has been recorded on this race yet",
+        onclick: () => undoLast(),
+      });
+    })(),
   ]);
 }
 
@@ -467,6 +507,7 @@ function boatSheet(state) {
         type: "button",
         text: ownLast ? `Undo this boat's last (${describe(ownLast)})` : "Nothing to undo",
         disabled: !ownLast,
+        title: ownLast ? "" : "Nothing has been recorded against this boat yet",
         onclick: async () => {
           await log.undoEvent(context.race.id, ownLast.id);
           sheetFor = null;

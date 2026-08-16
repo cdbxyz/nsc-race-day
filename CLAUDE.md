@@ -73,6 +73,18 @@ Hard rules:
   register gains a duplicate person. Every duplicate splits a handicap
   history, which is the one thing this app must not get wrong. Filter inputs
   spread `NO_AUTOFILL`.
+- **A disabled primary action must say why**, in one line beneath it, via
+  `actionWithReason` from ui.js. A greyed-out button with no explanation is
+  a dead end on a beach: the OOD cannot tell whether the app is broken or
+  whether they have missed a step. Compact chrome may carry the reason in
+  its label and `title` instead, but it must carry it somewhere.
+- **`races.start_at` is the wall-clock moment the countdown crossed zero**,
+  never `sequence_start_at + 10 minutes`. Those coincide only at 1x with no
+  general recall. Derive it with `wallClockAt()`, the exact inverse of
+  `scaledNow()`. The dev fast clock scales the instants fed to the ordinary
+  pure functions and never branches; only DISPLAY durations are compressed,
+  so `resultInputs` takes no speed and results are always computed from real
+  stored timestamps.
 - **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
   8-point compass direction it blows FROM. Beaufort because it is what an
   OOD can judge by eye from the beach without an anemometer, and what the
