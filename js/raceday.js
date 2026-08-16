@@ -6,6 +6,7 @@
 
 import * as db from "./db.js";
 import * as devmode from "./devmode.js";
+import * as device from "./device.js";
 import { entrySnapshot, seasonFor, winsForHelm, lapsFor } from "./handicap.js";
 import { cachedSeasonWins, lastRefreshedAt } from "./backend.js";
 
@@ -126,6 +127,13 @@ export async function createRaceDay({
        a day that is set up, signed on and then abandoned is still honestly
        labelled, and a branded day never records local wins. */
     is_test_data: devmode.wouldBeTestData(),
+    /* The phone that sets the day up is the phone running it. Claiming at
+       creation rather than at the first tap means a second device opening
+       the day is read-only from the outset, before it can double-record
+       anything. */
+    claimed_by: await device.deviceId(),
+    claimed_by_name: await device.deviceName(),
+    claimed_at: db.nowIso(),
     created_at: db.nowIso(),
   };
   await db.localWrite("race_days", raceDay);

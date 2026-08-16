@@ -52,6 +52,18 @@ export const shortenCourse = (raceId, { fastLaps, slowLaps }) =>
 export const abandonRace = (raceId) => append(raceId, "race_abandoned");
 
 /**
+ * The dev panel forced a race into a status by hand.
+ *
+ * Kept as an escape hatch for the situation nobody predicted, on a beach,
+ * with no developer available — but it must never be silent. A race found in
+ * a strange status months later has to be explainable, so the override is an
+ * event like any other, carrying what the status was and what it was changed
+ * to, and it appears in the history drawer among the taps around it.
+ */
+export const overrideStatus = (raceId, { from, to }) =>
+  append(raceId, "status_overridden", { payload: { from: from ?? null, to: to ?? null } });
+
+/**
  * Close the race. Explicit, never automatic: the OOD decides when the last
  * boat is home. Undoable, because a race closed by mistake is still running.
  */

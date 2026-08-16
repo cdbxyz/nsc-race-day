@@ -10,6 +10,8 @@
  * not race data, and losing it costs one PIN entry rather than a race record.
  */
 
+import { noteServerDate } from "./clockcheck.js";
+
 /* ---------------------------------------------------------------------------
  * CONFIG — the two values from SETUP.md. Both are safe to publish: the
  * publishable key grants nothing beyond the anon RLS policies, which are read
@@ -193,6 +195,12 @@ async function request(method, path, { body, headers = {}, authed = true } = {})
     // No signal. Retryable by definition.
     throw new ApiError(0, err.message || "network unavailable", null);
   }
+
+  /* Every reply carries the server's own clock in its Date header. Free, on
+     a connection we were making anyway, and the only authority a phone on a
+     beach has for whether its own clock is telling the truth. Noted even on
+     errors — a 403 still proves what time the server thinks it is. */
+  noteServerDate(res.headers);
 
   // One retry on 401: the token may have expired between check and send.
   if (res.status === 401 && authed) {

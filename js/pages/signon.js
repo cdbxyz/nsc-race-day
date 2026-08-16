@@ -10,7 +10,7 @@
 
 import {
   el, clear, field, selectField, panel, notice, armedButton, onArmChange, pickerField,
-  actionWithReason,
+  actionWithReason, readOnlyBanner,
 } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
@@ -18,6 +18,7 @@ import * as reg from "./../registers.js";
 import { factorFor } from "./../handicap.js";
 import { raceLabel, entryLabel, entryDetail } from "./../state.js";
 import { dutyLine } from "./setup.js";
+import * as device from "./../device.js";
 import { navigate } from "./../router.js";
 
 let host = null;
@@ -78,6 +79,7 @@ async function load() {
     boatById: new Map(boats.map((b) => [b.id, b])),
     helmById: new Map(members.map((h) => [h.id, h])),
     classById: new Map(classes.map((c) => [c.id, c])),
+    claim: await device.claimState(raceDay),
   };
 }
 
@@ -101,6 +103,24 @@ async function render() {
 
   const node = el("div");
   node.append(headerPanel(data));
+
+  /* Sign-on writes entries, so a second phone must not be able to add a boat
+     the running phone will also add. The list itself stays fully visible. */
+  if (!data.claim.canRecord) {
+    node.append(
+      readOnlyBanner({
+        byName: data.claim.byName,
+        claimedAt: data.claim.claimedAt,
+        onTakeOver: async () => {
+          await device.claimRaceDay(data.raceDay);
+          await render();
+        },
+      })
+    );
+    node.append(entriesPanel(data));
+    clear(host).append(node);
+    return;
+  }
 
   const carry = await carryForwardPanel(data);
   if (carry) node.append(carry);

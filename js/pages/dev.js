@@ -9,6 +9,7 @@
 import * as db from "./../db.js";
 import { el, flash, armedButton } from "./../ui.js";
 import { sync, fakeBackend } from "./../sync.js";
+import * as raceLog from "./../raceevents.js";
 import * as api from "./../supabase.js";
 import { supabaseBackend, pullReferenceData, lastRefreshedAt } from "./../backend.js";
 import { promptForPin } from "./../app.js";
@@ -74,18 +75,42 @@ export default {
       render();
     });
 
+    /* Forcing a race status is kept — it is the escape hatch for the
+       situation nobody predicted, on a beach, with no developer available.
+       But it is no longer silent or accidental: it is tap-to-arm, and it
+       appends a status_overridden event carrying the status before and
+       after, so the history drawer explains a strange status months later. */
     const raceStatus = section.querySelector("#dev-race-status");
-    raceStatus.addEventListener("change", async () => {
-      const race = await latestRace();
-      if (!race) {
-        flash(section, "Write a test event first — there is no race to move.", "error");
-        return;
-      }
-      // Status changes go through localWrite like everything else, which is
-      // also what re-evaluates whether the update prompt may show.
-      await db.localWrite("races", { ...race, status: raceStatus.value });
-      render();
+    // Once the user has chosen, the ticker must stop overwriting them —
+    // the choice has to survive until the second, confirming tap.
+    let statusTouched = false;
+    raceStatus.addEventListener("change", () => { statusTouched = true; });
+    const applyStatus = armedButton("dev.status", {
+      label: "Force this status",
+      armedLabel: "TAP AGAIN TO FORCE THE STATUS",
+      classes: "danger",
+      onConfirm: async () => {
+        const race = await latestRace();
+        if (!race) {
+          flash(section, "There is no race to move.", "error");
+          return;
+        }
+        const to = raceStatus.value;
+        if (!to || to === race.status) {
+          flash(section, "Pick a different status first.", "error");
+          return;
+        }
+        // The event first: the record of the override must exist before the
+        // thing it describes, so a failed write cannot leave an unexplained
+        // status behind.
+        await raceLog.overrideStatus(race.id, { from: race.status, to });
+        await db.localWrite("races", { ...race, status: to });
+        flash(section, `Forced ${race.status} → ${to}. Recorded in the race history.`);
+        statusTouched = false;
+        render();
+      },
     });
+    section.querySelector("#dev-status-apply").replaceWith(applyStatus);
 
     section.querySelector("#dev-write").addEventListener("click", async () => {
       await writeTestEvent();
@@ -115,7 +140,7 @@ export default {
       const outbox = await db.allOutbox();
       const { consecutiveFailures, lastDelay, backend } = sync.stats();
       const race = await latestRace();
-      raceStatus.value = race ? race.status : "";
+      if (!statusTouched) raceStatus.value = race ? race.status : "";
 
       const refreshedAt = await lastRefreshedAt();
       refreshedLine.textContent = refreshedAt

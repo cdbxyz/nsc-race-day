@@ -8,7 +8,9 @@
  * Visual only. The horn is the real signal; this is the thing beside it.
  */
 
-import { el, clear, panel, notice, field, selectField, armedButton, onArmChange } from "./../ui.js";
+import {
+  el, clear, panel, notice, field, selectField, armedButton, onArmChange, readOnlyBanner,
+} from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -17,6 +19,7 @@ import {
 } from "./../state.js";
 import { sequenceSpeed, isFastClock, onSpeedChange } from "./../devclock.js";
 import { wouldBeTestData } from "./../devmode.js";
+import * as device from "./../device.js";
 import { COMPASS, FORCES, windText } from "./../wind.js";
 import { PURSUIT_CALCULATOR_URL } from "./../calendar.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
@@ -72,7 +75,7 @@ async function load() {
   if (!race) return (context = null);
   const events = await log.eventsForRace(race.id);
   const entries = await rd.entriesForRace(race.id);
-  context = { raceDay, race, events, entries };
+  context = { raceDay, race, events, entries, claim: await device.claimState(raceDay) };
   return context;
 }
 
@@ -132,6 +135,28 @@ function render() {
 
   const { race, events, entries } = context;
   const sequence = sequenceState(events);
+
+  /* Arming the gun is the single most damaging thing two phones could do at
+     once — two sequences, two guns, a fleet that does not know which is
+     real. So the read-only banner replaces the whole page here rather than
+     just hiding a button. */
+  if (!context.claim.canRecord) {
+    clear(host).append(
+      panel("Start sequence", [
+        el("div.panel-body", {}, [
+          readOnlyBanner({
+            byName: context.claim.byName,
+            claimedAt: context.claim.claimedAt,
+            onTakeOver: async () => {
+              await device.claimRaceDay(context.raceDay);
+              await reload();
+            },
+          }),
+        ]),
+      ])
+    );
+    return;
+  }
 
   if (!sequence.running) {
     clear(host).append(armPanel(race, entries, sequence));

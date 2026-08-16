@@ -8,7 +8,9 @@
  * presses, no swipes, no gesture anyone has to remember with wet hands.
  */
 
-import { el, clear, panel, notice, field, armedButton, onArmChange } from "./../ui.js";
+import {
+  el, clear, panel, notice, field, armedButton, onArmChange, readOnlyBanner,
+} from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -27,6 +29,7 @@ import {
   scaledNow,
 } from "./../state.js";
 import { sequenceSpeed, isFastClock } from "./../devclock.js";
+import * as device from "./../device.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
 import { navigate } from "./../router.js";
 
@@ -91,6 +94,8 @@ async function load() {
        the lap splits and the finished rail. Nothing here is a second code
        path — raceState is handed a speed exactly as countdown() was. */
     state: raceState({ race, entries, events, speed: sequenceSpeed() }),
+    // A second phone may watch the race in full; it just may not tap on it.
+    claim: await device.claimState(raceDay),
   };
   return context;
 }
@@ -167,17 +172,36 @@ function render() {
       )
     );
   }
+  const readOnly = !context.claim.canRecord;
+  if (readOnly) {
+    node.append(
+      readOnlyBanner({
+        byName: context.claim.byName,
+        claimedAt: context.claim.claimedAt,
+        onTakeOver: async () => {
+          await device.claimRaceDay(context.raceDay);
+          await reload();
+        },
+      })
+    );
+  }
+
   node.append(clockBar(state));
   if (state.ended) node.append(endedPanel(state));
   if (state.done.length) node.append(finishedRail(state));
-  if (!state.ended) node.append(racingGrid(state));
-  node.append(endBar(state));
-  node.append(raceControls(state));
-  if (sheetFor) node.append(boatSheet(state));
+  /* The whole race stays visible when read-only — an OOD taking over wants
+     to see it before claiming it — but nothing that writes an event is
+     offered, so there is no way to double-record by mistake. */
+  if (!state.ended && !readOnly) node.append(racingGrid(state));
+  if (!readOnly) {
+    node.append(endBar(state));
+    node.append(raceControls(state));
+    if (sheetFor) node.append(boatSheet(state));
+    if (raceSheet?.kind === "shorten") node.append(shortenSheet(state));
+    if (raceSheet?.kind === "abandon") node.append(abandonSheet(state));
+    if (raceSheet?.kind === "unaccounted") node.append(unaccountedSheet(state));
+  }
   if (showHistory) node.append(historyDrawer());
-  if (raceSheet?.kind === "shorten") node.append(shortenSheet(state));
-  if (raceSheet?.kind === "abandon") node.append(abandonSheet(state));
-  if (raceSheet?.kind === "unaccounted") node.append(unaccountedSheet(state));
 
   clear(host).append(node);
 }
@@ -203,12 +227,16 @@ function clockBar(state) {
        the rule is that a disabled control explains itself, not that it must
        do so in one particular shape. */
     (() => {
-      const can = lastUndoable(context.events);
+      const can = lastUndoable(context.events) && context.claim.canRecord;
       return el("button.kill.undoall", {
         type: "button",
-        text: can ? "Undo" : "Nothing to undo",
+        text: can ? "Undo" : context.claim.canRecord ? "Nothing to undo" : "Read only",
         disabled: !can,
-        title: can ? "Undo the last action" : "Nothing has been recorded on this race yet",
+        title: can
+          ? "Undo the last action"
+          : context.claim.canRecord
+            ? "Nothing has been recorded on this race yet"
+            : "This day is being run on another phone",
         onclick: () => undoLast(),
       });
     })(),
@@ -526,6 +554,11 @@ function describe(event) {
   if (event.type === "lap_recorded") return "lap";
   if (event.type === "boat_finished") return "finish";
   if (event.type === "code_applied") return event.payload?.code ?? "code";
+  if (event.type === "status_overridden") {
+    // Spelled out, because this is the one event a human forced by hand and
+    // the history drawer is where anyone will come looking for it.
+    return `status forced: ${event.payload?.from ?? "?"} → ${event.payload?.to ?? "?"}`;
+  }
   return event.type.replace(/_/g, " ");
 }
 
@@ -545,6 +578,8 @@ function historyDrawer() {
         ]),
         el("button.kill", {
           type: "button",
+          disabled: !context.claim.canRecord,
+          title: context.claim.canRecord ? "" : "This day is being run on another phone",
           text: "Undo",
           onclick: async () => {
             await log.undoEvent(context.race.id, event.id);

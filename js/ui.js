@@ -385,6 +385,46 @@ export function openPicker({ title, items, onPick, onAddNew = null, addLabel = "
 }
 
 /**
+ * The read-only banner a second device sees, with its takeover action.
+ *
+ * Deliberately not a lock screen: everything below it stays visible and
+ * scrollable, because an OOD taking over wants to see the race before
+ * claiming it. Only recording is withheld.
+ *
+ * Taking over is armed rather than instant — it is a real decision, and a
+ * mis-tap that silently stole the day from the phone actually running the
+ * race would be worse than the double-recording this prevents.
+ *
+ * @param {{byName: string|null, claimedAt: string|null, onTakeOver: Function}} args
+ */
+export function readOnlyBanner({ byName, claimedAt, onTakeOver }) {
+  const who = byName ? `“${byName}”` : "another phone";
+  const since = claimedAt
+    ? ` since ${new Date(claimedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+
+  const wrap = el("div.readonlybar");
+  wrap.append(
+    el("div.readonlybar-line", {}, [
+      el("strong", { text: "READ ONLY — this day is being run on another phone" }),
+      el("span.readonlybar-detail", {
+        text: `${who} claimed it${since}. You can see everything; nothing you tap here would be recorded, so recording is switched off to stop the race being logged twice.`,
+      }),
+    ]),
+    armedButton("device.takeover", {
+      label: "Take over on this device",
+      armedLabel: "TAP AGAIN TO TAKE OVER",
+      classes: "danger",
+      onConfirm: onTakeOver,
+    }),
+    el("p.readonlybar-detail", {
+      text: "The other phone keeps everything it has recorded and keeps sending it to the club database. It simply stops being able to record anything new.",
+    })
+  );
+  return wrap;
+}
+
+/**
  * A labelled control that opens a picker. Reads as a field, behaves as a
  * button — there is no text input to mistype into.
  */

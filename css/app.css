@@ -684,3 +684,23 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   font-size:.92rem;font-weight:700;line-height:1.2;
 }
 .testmodebar-detail{font-size:.76rem;line-height:1.35;color:#FFE3E7}
+
+/* ---- soft lock: a second phone sees, but cannot record ---- */
+.readonlybar{
+  background:var(--ink);color:#fff;border-radius:3px;
+  padding:14px;margin:14px 0;display:flex;flex-direction:column;gap:10px;
+}
+.readonlybar-line{display:flex;flex-direction:column;gap:4px}
+.readonlybar-line strong{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;
+  font-size:.95rem;font-weight:700;line-height:1.2;color:#FFD7DD;
+}
+.readonlybar-detail{font-size:.78rem;line-height:1.4;color:#B9CCEA}
+.readonly .boatbtn,.readonly .bigstart,.readonly .railcard{pointer-events:none;opacity:.55}
+
+/* ---- device clock warning: advisory, but not quiet ---- */
+.clockbar-warn{
+  background:#8A4B00;color:#fff;
+  padding:10px 14px;font-size:.8rem;line-height:1.4;
+  border-top:2px solid #fff;border-bottom:2px solid #fff;
+}

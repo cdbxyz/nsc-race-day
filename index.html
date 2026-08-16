@@ -37,6 +37,9 @@
        be dismissed. See js/devmode.js. -->
   <div class="testmodebar" id="testmode-bar" hidden role="alert" aria-live="assertive"></div>
 
+  <!-- Device clock vs the club database. Advisory, never blocking. -->
+  <div class="clockbar-warn" id="clock-bar" hidden role="alert"></div>
+
   <div class="updatebar" id="update-bar" hidden role="status">
     <span class="updatebar-text">Update available</span>
     <button class="updatebar-action" type="button" id="update-refresh">Tap to refresh</button>
@@ -166,6 +169,12 @@
             <option value="abandoned">abandoned</option>
           </select>
         </div>
+        <div id="dev-status-apply"></div>
+        <p class="stub" id="dev-status-note" style="padding:8px 0 0">
+          Forcing a status is the escape hatch for a situation nobody
+          predicted. It is recorded as an event on the race, so the history
+          drawer always says who moved it and from what.
+        </p>
         <p class="stub" style="padding:8px 0 0">
           The update prompt stays hidden while a race is in
           <code>sequence</code> or <code>racing</code>.

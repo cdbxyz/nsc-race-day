@@ -95,6 +95,19 @@ Hard rules:
   mode means adding it to `activeModes()`, not remembering to paint another
   banner. The sync destination is the dangerous one: on the fake backend the
   sync pill still cheerfully reads "All synced".
+- **A race day is claimed by one device.** `device.js` holds the claim; a
+  second phone sees everything read-only with a visible "Take over on this
+  device". The lock is SOFT and must stay soft: the losing device keeps
+  every row and keeps draining its outbox, because discarding unsynced
+  events is the one unrecoverable act in this system and the losing phone
+  often holds the only copy of the last few taps. An unclaimed day (created
+  before the feature, or synced down) is claimable by anyone — never
+  read-only for everybody.
+- **Timestamps are only as good as the phone's clock**, so `clockcheck.js`
+  compares against the `Date` header on every PostgREST reply and warns in
+  the shell when the device is more than 90s out. Advisory only: it never
+  rewrites a stored timestamp and never blocks a write. A known offset is
+  recoverable; an unknown one is not.
 - **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
   8-point compass direction it blows FROM. Beaufort because it is what an
   OOD can judge by eye from the beach without an anemometer, and what the

@@ -10,6 +10,7 @@ import { sync } from "./sync.js";
 import * as api from "./supabase.js";
 import { supabaseBackend, pullReferenceData } from "./backend.js";
 import { activeModes, onModeChange } from "./devmode.js";
+import { clockWarning, onClockChange } from "./clockcheck.js";
 import { createPinPrompt } from "./pin.js";
 import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
@@ -65,6 +66,24 @@ function wireTestModeBanner(node) {
   paint(activeModes());
 }
 
+/**
+ * The device-clock warning.
+ *
+ * Advisory by design: it never rewrites a stored timestamp and never blocks a
+ * write. A phone with a wrong clock still holds the best record of the race
+ * that exists, and an offset that is KNOWN is recoverable afterwards — which
+ * is the entire point of saying it out loud.
+ */
+function wireClockWarning(node) {
+  if (!node) return;
+  const paint = (warning) => {
+    node.textContent = warning ?? "";
+    node.hidden = !warning;
+  };
+  onClockChange(paint);
+  paint(clockWarning());
+}
+
 async function boot() {
   await db.openDB();
 
@@ -89,6 +108,7 @@ async function boot() {
 
   updatePrompt = createUpdatePrompt(document.getElementById("update-bar"));
   wireTestModeBanner(document.getElementById("testmode-bar"));
+  wireClockWarning(document.getElementById("clock-bar"));
 
   const routes = {};
   for (const [name, page] of Object.entries(PAGES)) {
