@@ -5,6 +5,7 @@
  */
 
 import * as db from "./db.js";
+import * as devmode from "./devmode.js";
 import { entrySnapshot, seasonFor, winsForHelm, lapsFor } from "./handicap.js";
 import { cachedSeasonWins, lastRefreshedAt } from "./backend.js";
 
@@ -119,6 +120,12 @@ export async function createRaceDay({
     ro1_name: String(ro1Name ?? "").trim() || null,
     ro2_name: String(ro2Name ?? "").trim() || null,
     status: "open",
+    /* A day begun in ANY non-production mode is test data from birth, by the
+       same rule whichever mode it is — a fast clock or a fake sync
+       destination. Branding it here rather than at the first sequence means
+       a day that is set up, signed on and then abandoned is still honestly
+       labelled, and a branded day never records local wins. */
+    is_test_data: devmode.wouldBeTestData(),
     created_at: db.nowIso(),
   };
   await db.localWrite("race_days", raceDay);

@@ -33,6 +33,10 @@
     </button>
   </header>
 
+  <!-- Non-production modes live in the shell, above every page, and cannot
+       be dismissed. See js/devmode.js. -->
+  <div class="testmodebar" id="testmode-bar" hidden role="alert" aria-live="assertive"></div>
+
   <div class="updatebar" id="update-bar" hidden role="status">
     <span class="updatebar-text">Update available</span>
     <button class="updatebar-action" type="button" id="update-refresh">Tap to refresh</button>

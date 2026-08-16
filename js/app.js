@@ -9,6 +9,7 @@ import * as db from "./db.js";
 import { sync } from "./sync.js";
 import * as api from "./supabase.js";
 import { supabaseBackend, pullReferenceData } from "./backend.js";
+import { activeModes, onModeChange } from "./devmode.js";
 import { createPinPrompt } from "./pin.js";
 import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
@@ -30,6 +31,39 @@ const PAGES = { home, setup, registers, signon, checklist, sequence, live, resul
 let router;
 let updatePrompt;
 let pinPrompt;
+
+/**
+ * The TEST MODE banner.
+ *
+ * Lives in the shell so it is above every page — the live race and the
+ * results sheet included — and has no dismiss control at all. The only way
+ * to clear it is to leave the mode, and since no dev mode survives a reload,
+ * reloading always works.
+ */
+function wireTestModeBanner(node) {
+  if (!node) return;
+
+  const paint = (modes) => {
+    node.textContent = "";
+    node.hidden = modes.length === 0;
+    for (const mode of modes) {
+      const line = document.createElement("div");
+      line.className = "testmodebar-line";
+
+      const label = document.createElement("strong");
+      label.textContent = mode.label;
+      const detail = document.createElement("span");
+      detail.className = "testmodebar-detail";
+      detail.textContent = mode.detail;
+
+      line.append(label, detail);
+      node.append(line);
+    }
+  };
+
+  onModeChange(paint);
+  paint(activeModes());
+}
 
 async function boot() {
   await db.openDB();
@@ -54,6 +88,7 @@ async function boot() {
   });
 
   updatePrompt = createUpdatePrompt(document.getElementById("update-bar"));
+  wireTestModeBanner(document.getElementById("testmode-bar"));
 
   const routes = {};
   for (const [name, page] of Object.entries(PAGES)) {

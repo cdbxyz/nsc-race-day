@@ -670,3 +670,17 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   margin:6px 0 10px;padding-left:18px;font-size:.82rem;line-height:1.45;color:var(--flag);
 }
 .card.broken{border-left:4px solid var(--flag);background:#FFF5F6}
+
+/* ---- non-production modes: impossible to miss ---- */
+.testmodebar{
+  background:var(--flag);color:#fff;
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  display:flex;flex-direction:column;gap:8px;
+  border-top:2px solid #fff;border-bottom:2px solid #fff;
+}
+.testmodebar-line{display:flex;flex-direction:column;gap:2px}
+.testmodebar-line strong{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;
+  font-size:.92rem;font-weight:700;line-height:1.2;
+}
+.testmodebar-detail{font-size:.76rem;line-height:1.35;color:#FFE3E7}

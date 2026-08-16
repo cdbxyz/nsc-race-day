@@ -22,6 +22,28 @@ const MAX_DELAY = 30_000;
  * @param {object} deps
  * @param {{name:string, push:(batch:object[])=>Promise<void>}} deps.backend
  */
+/* Who to tell when the sync destination changes.
+ *
+ * Module-level rather than per-instance because the banner is a property of
+ * the app, not of a particular sync engine, and tests construct throwaway
+ * engines constantly without wanting to repaint anything. */
+const backendListeners = new Set();
+
+export function onBackendChange(fn) {
+  backendListeners.add(fn);
+  return () => backendListeners.delete(fn);
+}
+
+function announceBackend(name) {
+  for (const fn of backendListeners) {
+    try {
+      fn(name);
+    } catch (err) {
+      console.error("backend listener failed", err);
+    }
+  }
+}
+
 export function createSync({
   backend: initialBackend,
   setTimeout: setTimer = globalThis.setTimeout.bind(globalThis),
@@ -199,8 +221,12 @@ export function createSync({
     /** Swap the destination — the dev panel points at the fake backend to
         rehearse bad signal without touching the club's real data. */
     setBackend(next) {
+      const changed = backend?.name !== next?.name;
       backend = next;
       consecutiveFailures = 0;
+      // devmode.js listens: switching the destination away from Supabase has
+      // to repaint the TEST MODE banner immediately, not at the next render.
+      if (changed) announceBackend(next?.name ?? null);
     },
     get status() {
       return status;

@@ -16,6 +16,7 @@ import {
   sequenceState, countdown, marksCrossed, raceLabel, scaledNow, wallClockAt, SEQUENCE_MS,
 } from "./../state.js";
 import { sequenceSpeed, isFastClock, onSpeedChange } from "./../devclock.js";
+import { wouldBeTestData } from "./../devmode.js";
 import { COMPASS, FORCES, windText } from "./../wind.js";
 import { PURSUIT_CALCULATOR_URL } from "./../calendar.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
@@ -185,10 +186,13 @@ function armPanel(race, entries, sequence) {
       // Written before anything else happens, so the tap time is the record.
       await log.startSequence(race.id);
       await rd.setRaceStatusIfEarlier(race, "sequence");
-      /* A sequence begun on the fast clock makes the whole day test data,
-         permanently. The events it produces carry real timestamps and are
-         otherwise indistinguishable from a real race. */
-      if (isFastClock()) await rd.markRaceDayAsTest(context.raceDay);
+      /* A sequence begun in ANY non-production mode makes the whole day test
+         data, permanently — a fast clock, or a sync destination that is not
+         the club's database. The events it produces carry real timestamps
+         and are otherwise indistinguishable from a real race, so the day
+         itself has to carry the flag. Caught here as well as at day creation
+         because a mode can be switched on halfway through. */
+      if (wouldBeTestData()) await rd.markRaceDayAsTest(context.raceDay);
       /* Seed just above 10:00 so the first reading CROSSES the class-flag
          mark and pulses. A null previous stays silent, which is what opening
          the page part-way through a running sequence should do — but tapping

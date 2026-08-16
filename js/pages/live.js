@@ -150,7 +150,10 @@ function render() {
   const node = el("div");
   if (rd.isTestDay(context.raceDay)) {
     node.append(
-      notice("TEST DATA — this race was started on the dev fast clock.", "error")
+      notice(
+        "TEST DATA — this day was started in a dev mode. Nothing here counts, and no handicap win will be recorded.",
+        "error"
+      )
     );
   }
   /* Said plainly while it is happening, because the clock on this page and

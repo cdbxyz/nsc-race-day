@@ -85,6 +85,16 @@ Hard rules:
   pure functions and never branches; only DISPLAY durations are compressed,
   so `resultInputs` takes no speed and results are always computed from real
   stored timestamps.
+- **Non-production modes must be impossible to miss and impossible to keep.**
+  Any dev state that could survive into a real race day belongs in
+  `devmode.js`: it paints a persistent, undismissable banner in the app
+  shell (above every page, live race and results included), it lives in
+  module memory with nothing written to any storage API so a reload is
+  always a return to production, and a race day begun while it is active is
+  branded `is_test_data` and records no handicap win. Adding a third dev
+  mode means adding it to `activeModes()`, not remembering to paint another
+  banner. The sync destination is the dangerous one: on the fake backend the
+  sync pill still cheerfully reads "All synced".
 - **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
   8-point compass direction it blows FROM. Beaufort because it is what an
   OOD can judge by eye from the beach without an anemometer, and what the

@@ -180,7 +180,7 @@ function headerPanel() {
 
 function testDataBanner() {
   return notice(
-    "TEST DATA — this race was run on the dev fast clock. These results are not real and must not be published as if they were.",
+    "TEST DATA — this day was run in a dev mode (fast clock or a test sync destination). These results are not real and must not be published as if they were.",
     "error"
   );
 }

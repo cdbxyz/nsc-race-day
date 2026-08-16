@@ -154,7 +154,7 @@ function render() {
 
   const node = el("div");
   if (rd.isTestDay(context.raceDay)) {
-    node.append(notice("TEST DATA — this day was run on the dev fast clock.", "error"));
+    node.append(notice("TEST DATA — this day was run in a dev mode. Nothing recorded on it counts.", "error"));
   }
   node.append(tallyPanel());
   if (context.template) node.append(checklistPanel());
