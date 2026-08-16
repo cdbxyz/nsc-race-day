@@ -519,6 +519,87 @@ export function implausibleElapsed({ elapsedSeconds, code = "", finished = true 
 }
 
 /**
+ * Do the race's two timestamps agree with each other and with the log?
+ *
+ * The per-boat plausibility check above cannot see a SYSTEMATIC start-time
+ * error. If start_at is wrong by four minutes, every boat is wrong by four
+ * minutes, every elapsed time still looks like a perfectly ordinary race, and
+ * nothing is flagged — but the sheet is wrong, and not uniformly so: corrected
+ * time is elapsed x 1000 / PY, so a constant shift moves boats on different
+ * handicaps by different amounts and can reorder the fleet.
+ *
+ * Two things are checked, because either alone can be fooled:
+ *
+ *  1. start_at - sequence_start_at should be one sequence length. This catches
+ *     one column being edited, replayed or synced without the other.
+ *  2. sequence_start_at should equal the anchor in the event log — the last
+ *     `sequence_started` or `general_recall`. This catches BOTH columns being
+ *     shifted together, which check 1 cannot see, and it is the check that has
+ *     teeth now that the two values are derived independently. (Before the
+ *     start_at fix they were not: sequence_start_at was computed as start_at
+ *     minus ten minutes, so check 1 passed by construction however wrong the
+ *     pair was.)
+ *
+ * `allowedSequenceMs` exists for the dev fast clock, where a real ten-minute
+ * sequence honestly takes ten seconds. It is passed in rather than read from
+ * devclock.js so this module stays pure and the caller has to be explicit
+ * about accepting a compressed race.
+ *
+ * @returns {{problem: string, detail: string}|null} null when consistent.
+ */
+export function startTimeCheck({
+  race,
+  events = [],
+  allowedSequenceMs = [SEQUENCE_MS],
+  toleranceMs = 2000,
+}) {
+  const startAt = ms(race?.start_at);
+  const sequenceStartAt = ms(race?.sequence_start_at);
+
+  // Nothing recorded yet is not an inconsistency; the race simply has not run.
+  if (startAt == null) return null;
+
+  if (sequenceStartAt == null) {
+    return {
+      problem: "The sequence start time is missing",
+      detail:
+        "The gun is recorded but the ten-minute sequence that led to it is not, so there is nothing to check it against.",
+    };
+  }
+
+  const gap = startAt - sequenceStartAt;
+  if (gap < 0) {
+    return {
+      problem: "The gun is recorded before the sequence started",
+      detail: `The start time is ${formatElapsed(-gap)} EARLIER than the sequence start. One of the two is wrong.`,
+    };
+  }
+
+  const matches = allowedSequenceMs.some((expected) => Math.abs(gap - expected) <= toleranceMs);
+  if (!matches) {
+    const expected = allowedSequenceMs[0];
+    const off = gap - expected;
+    return {
+      problem: "The start and sequence times do not agree",
+      detail: `The gun is ${formatElapsed(gap)} after the sequence started, but a sequence is ${formatElapsed(expected)} — ${off > 0 ? "a gap" : "a shortfall"} of ${formatElapsed(Math.abs(off))}. Every boat's elapsed time is out by the same amount.`,
+    };
+  }
+
+  /* The log is the authority. A postponement or general recall re-anchors the
+     sequence, and sequenceState already accounts for that, so this compares
+     against the anchor actually in force rather than the first tap. */
+  const anchor = sequenceState(events).startedAt;
+  if (anchor != null && Math.abs(anchor - sequenceStartAt) > toleranceMs) {
+    return {
+      problem: "The recorded times do not match the event log",
+      detail: `The log says the sequence was armed at ${formatClockTime(anchor)}, but the race says ${formatClockTime(sequenceStartAt)} — ${formatElapsed(Math.abs(anchor - sequenceStartAt))} apart. Both timestamps are shifted together, so every boat's elapsed time is out by the same amount.`,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Elapsed race time for the pinned clock. Freezes at the ending, so a finished
  * race shows how long it took rather than how long ago it was.
  */

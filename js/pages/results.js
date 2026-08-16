@@ -14,10 +14,12 @@ import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
 import {
   resultInputs, correctionFor, raceLabel, raceName, entryLabel, entryDetail, liveEvents,
+  startTimeCheck, SEQUENCE_MS,
 } from "./../state.js";
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
 import { savePdf } from "./../pdf.js";
 import { COMPASS, FORCES, windText, windShort } from "./../wind.js";
+import { SPEEDS } from "./../devclock.js";
 import { navigate } from "./../router.js";
 import { dutyLine } from "./setup.js";
 
@@ -93,6 +95,16 @@ async function load() {
     // Ended is an event, not a status column: undoing the ending puts the
     // race back to live, and publish has to follow that.
     ended: liveEvents(events).some((e) => e.type === "race_ended"),
+    /* A test day legitimately has a compressed sequence — ten real seconds
+       at 60x — so those gaps are accepted, but ONLY on a day already branded
+       test data. A real race day gets no such latitude. */
+    timeCheck: startTimeCheck({
+      race,
+      events,
+      allowedSequenceMs: rd.isTestDay(raceDay)
+        ? SPEEDS.map((speed) => SEQUENCE_MS / speed)
+        : [SEQUENCE_MS],
+    }),
     results: scoreRace(inputs),
   };
   return context;
@@ -120,6 +132,7 @@ function render() {
 
   const node = el("div");
   if (rd.isTestDay(context.raceDay)) node.append(testDataBanner());
+  if (context.timeCheck) node.append(startTimeBanner(context.timeCheck));
   node.append(headerPanel());
   node.append(windPanel());
   node.append(resultsPanel());
@@ -170,6 +183,20 @@ function testDataBanner() {
     "TEST DATA — this race was run on the dev fast clock. These results are not real and must not be published as if they were.",
     "error"
   );
+}
+
+/**
+ * A systematic start-time error, said out loud.
+ *
+ * Deliberately separate from the per-boat banner: this one means every time
+ * on the sheet is wrong by the same amount, which is exactly the fault the
+ * per-boat plausibility check is blind to. An OOD reading a sheet of
+ * ordinary-looking times has no other way to find out.
+ */
+function startTimeBanner(check) {
+  const box = notice(`${check.problem}. ${check.detail}`, "error");
+  box.classList.add("timecheck");
+  return box;
 }
 
 /* ---- the sheet ---------------------------------------------------------- */

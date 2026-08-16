@@ -26,6 +26,7 @@ import {
   resultInputs,
   implausibleElapsed,
   MAX_PLAUSIBLE_ELAPSED_SECONDS,
+  startTimeCheck,
 } from "../js/state.js";
 import { scoreRace } from "../js/scoring.js";
 
@@ -322,4 +323,143 @@ test("a boat still racing is not flagged", () => {
 
 test("an ordinary finish is not flagged", () => {
   assert.equal(implausibleElapsed({ elapsedSeconds: 2700 }), null);
+});
+
+/* ---- the two race timestamps must agree ---------------------------------
+ *
+ * A systematic start-time error shifts every boat by the same amount, so
+ * every elapsed time still looks like an ordinary race and implausibleElapsed
+ * sees nothing wrong. This is the check that catches it.
+ */
+
+const SEQ_START = T0;
+const GUN = T0 + SEQUENCE_MS;
+const goodRace = {
+  ...RACE,
+  sequence_start_at: iso(SEQ_START),
+  start_at: iso(GUN),
+};
+const goodEvents = [event("sequence_started", SEQ_START)];
+
+test("a normal race passes the check", () => {
+  assert.equal(startTimeCheck({ race: goodRace, events: goodEvents }), null);
+});
+
+test("a race that has not started is not an inconsistency", () => {
+  assert.equal(startTimeCheck({ race: { ...RACE, start_at: null }, events: [] }), null);
+});
+
+test("a missing sequence start is flagged", () => {
+  const check = startTimeCheck({
+    race: { ...goodRace, sequence_start_at: null },
+    events: goodEvents,
+  });
+  assert.match(check.problem, /sequence start time is missing/);
+});
+
+test("a gun recorded before its own sequence is flagged", () => {
+  const check = startTimeCheck({
+    race: { ...goodRace, start_at: iso(SEQ_START - 60_000) },
+    events: goodEvents,
+  });
+  assert.match(check.problem, /before the sequence started/);
+});
+
+test("a gap that is not ten minutes is flagged, with the size of the error", () => {
+  // start_at four minutes late: every boat's elapsed time is four minutes short.
+  const check = startTimeCheck({
+    race: { ...goodRace, start_at: iso(GUN + 4 * 60_000) },
+    events: goodEvents,
+  });
+  assert.match(check.problem, /do not agree/);
+  assert.match(check.detail, /4:00/, "says how far out it is");
+  assert.match(check.detail, /same amount/);
+});
+
+test("both columns shifted together are still caught, via the log", () => {
+  /* This is the case the gap check cannot see: the two timestamps agree
+     perfectly with each other and disagree with what actually happened. */
+  const shift = 7 * 60_000;
+  const check = startTimeCheck({
+    race: {
+      ...goodRace,
+      sequence_start_at: iso(SEQ_START + shift),
+      start_at: iso(GUN + shift),
+    },
+    events: goodEvents,
+  });
+  assert.match(check.problem, /do not match the event log/);
+  assert.match(check.detail, /7:00/);
+});
+
+test("a per-boat check would have missed a systematic shift entirely", () => {
+  // The point of the whole exercise: every time still looks perfectly normal.
+  const shift = 7 * 60_000;
+  const { events, gun } = fastRace({ speed: 1 });
+  const shifted = {
+    ...RACE,
+    sequence_start_at: iso(gun - SEQUENCE_MS + shift),
+    start_at: iso(gun + shift),
+  };
+  const rows = resultInputs({ race: shifted, entries: [ENTRY], events });
+  assert.equal(rows[0].implausible, null, "nothing wrong per boat");
+  assert.ok(startTimeCheck({ race: shifted, events }), "but the race-level check fires");
+});
+
+test("a small discrepancy inside tolerance is not nagged about", () => {
+  assert.equal(
+    startTimeCheck({ race: { ...goodRace, start_at: iso(GUN + 800) }, events: goodEvents }),
+    null
+  );
+});
+
+test("a postponement re-anchors both the log and the check", () => {
+  const restart = T0 + 300_000;
+  const events = [
+    event("sequence_started", T0),
+    event("postponed", T0 + 120_000),
+    event("sequence_started", restart),
+  ];
+  const race = {
+    ...RACE,
+    sequence_start_at: iso(restart),
+    start_at: iso(restart + SEQUENCE_MS),
+  };
+  assert.equal(startTimeCheck({ race, events }), null, "the restart is the anchor");
+
+  // And the ORIGINAL tap is now wrong, because it is not the anchor any more.
+  const stale = { ...race, sequence_start_at: iso(T0), start_at: iso(T0 + SEQUENCE_MS) };
+  assert.ok(startTimeCheck({ race: stale, events }), "the pre-postponement times are flagged");
+});
+
+test("a general recall re-anchors the check too", () => {
+  const recall = T0 + 400_000;
+  const events = [event("sequence_started", T0), event("general_recall", recall)];
+  const race = {
+    ...RACE,
+    sequence_start_at: iso(recall),
+    start_at: iso(recall + SEQUENCE_MS),
+  };
+  assert.equal(startTimeCheck({ race, events }), null);
+});
+
+test("a compressed sequence passes only when it is allowed", () => {
+  const race = {
+    ...RACE,
+    sequence_start_at: iso(SEQ_START),
+    start_at: iso(SEQ_START + 10_000), // 60x
+  };
+  assert.ok(
+    startTimeCheck({ race, events: goodEvents }),
+    "a real race day gets no latitude for a ten-second sequence"
+  );
+  assert.equal(
+    startTimeCheck({
+      race,
+      events: goodEvents,
+      allowedSequenceMs: [SEQUENCE_MS, SEQUENCE_MS / 10, SEQUENCE_MS / 60],
+    }),
+    null,
+    "a day already branded test data does"
+  );
 });
