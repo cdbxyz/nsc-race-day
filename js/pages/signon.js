@@ -8,7 +8,9 @@
  * Nothing here is recomputed later, so a published result never shifts.
  */
 
-import { el, clear, field, selectField, panel, notice, armedButton, onArmChange } from "./../ui.js";
+import {
+  el, clear, field, selectField, panel, notice, armedButton, onArmChange, pickerField,
+} from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as reg from "./../registers.js";
@@ -320,16 +322,30 @@ async function signOnCombination(data, row, container) {
  * and name the crew if the class carries one. Everyone comes from the same
  * members register — a person helms one week and crews the next.
  */
+/* Every register entity here is CHOSEN, not typed.
+ *
+ * A free-text box with a datalist looks the same and behaves nothing like it:
+ * the phone keyboard offers its own autofill above the browser's suggestions,
+ * a thumb takes the wrong one, and "Hamish Fowler" enters the register a
+ * second time as "hamish" or as somebody's email address. Every duplicate is a
+ * split handicap history, which is the one thing this app must not get wrong.
+ *
+ * So each of class, helm, crew and hull is a picker: filter-as-you-type over
+ * what already exists, with adding something new as a deliberate, separate tap.
+ */
 function newCombinationForm(data) {
   const body = el("div.panel-body.subform");
 
-  const klass = selectField("Class", [
-    ...data.classes.map((c) => ({
-      value: c.id,
-      label: `${c.name} · ${c.base_py}${(c.crew_size ?? 1) === 2 ? " · 2 up" : ""}`,
-    })),
-    { value: "__new__", label: "+ New class…" },
-  ]);
+  const classLabel = (c) =>
+    `${c.name} · ${c.base_py}${(c.crew_size ?? 1) === 2 ? " · 2 up" : ""}`;
+
+  let classId = null;
+  let helmId = null;
+  let crewId = null;
+  let boatId = null;
+  let newHelmName = "";
+  let newCrewName = "";
+
   const newClassName = field("Class name", { class: "text", autocomplete: "off" });
   const newClassPy = field("Base PY", { inputMode: "numeric", autocomplete: "off" });
   const newClassCrew = selectField("Crew", [
@@ -340,58 +356,146 @@ function newCombinationForm(data) {
     newClassName.node, newClassPy.node, newClassCrew.node,
   ]);
 
-  const memberOptions = el("datalist", { id: "member-names" },
-    data.members.map((m) => el("option", { value: m.name })));
-
-  const helmName = field("Helm", { class: "text", list: "member-names", autocomplete: "off" });
-  const crewName = field("Crew (optional)", {
-    class: "text", list: "member-names", autocomplete: "off",
-    placeholder: "Leave blank if sailing solo",
+  const classPick = pickerField("Class", {
+    placeholder: "Choose a class…",
+    items: data.classes.map((c) => ({ label: c.name, detail: classLabel(c), row: c })),
+    addLabel: "New class…",
+    onPick: (item) => {
+      classId = item.row.id;
+      newClassBlock.hidden = true;
+      classPick.set(classLabel(item.row));
+      syncForClass();
+    },
+    onAddNew: (text) => {
+      classId = null;
+      newClassBlock.hidden = false;
+      newClassName.input.value = text;
+      classPick.set("New class…");
+      syncForClass();
+    },
   });
-  const crewBlock = el("div", { hidden: true }, [crewName.node]);
 
-  const sailNo = field("Sail number (optional)", { class: "text", autocomplete: "off" });
+  const helmPick = pickerField("Helm", {
+    placeholder: "Choose a helm…",
+    items: data.members.map((m) => ({ label: m.name, row: m })),
+    addLabel: "Add a new member…",
+    onPick: (item) => {
+      helmId = item.row.id;
+      newHelmName = "";
+      helmPick.set(item.row.name);
+    },
+    onAddNew: (text) => {
+      helmId = null;
+      newHelmName = text;
+      helmPick.set(text ? `${text} — new member` : null);
+    },
+  });
+
+  const crewPick = pickerField("Crew (optional)", {
+    placeholder: "Sailing solo",
+    items: [
+      { label: "— sailing solo —", row: null },
+      ...data.members.map((m) => ({ label: m.name, row: m })),
+    ],
+    addLabel: "Add a new member…",
+    onPick: (item) => {
+      crewId = item.row?.id ?? null;
+      newCrewName = "";
+      crewPick.set(item.row?.name ?? null);
+    },
+    onAddNew: (text) => {
+      crewId = null;
+      newCrewName = text;
+      crewPick.set(text ? `${text} — new member` : null);
+    },
+  });
+  const crewBlock = el("div", { hidden: true }, [crewPick.node]);
+
+  /* Hulls are optional and belong to a class, so the list narrows once a
+     class is chosen — an OOD should not scroll past every Laser to find a
+     Wayfarer's sail number. */
+  const boatPick = pickerField("Sail number (optional)", {
+    placeholder: "No hull recorded",
+    items: [],
+    addLabel: "New sail number…",
+    onPick: (item) => {
+      boatId = item.row?.id ?? null;
+      newSail.input.value = "";
+      newSailBlock.hidden = true;
+      boatPick.set(item.row ? boatLabel(item.row) : null);
+    },
+    onAddNew: (text) => {
+      boatId = null;
+      newSailBlock.hidden = false;
+      newSail.input.value = text;
+      boatPick.set(text || "New sail number…");
+    },
+  });
+  const newSail = field("Sail number", { class: "text", autocomplete: "off" });
+  const newSailBlock = el("div.subform", { hidden: true }, [newSail.node]);
+
+  const boatLabel = (b) => [b.sail_no, b.name].filter(Boolean).join(" · ") || "(unnamed hull)";
 
   /* The crew field appears only for a double-hander — but stays optional,
      because sailing a two-man boat single-handed is perfectly normal. */
-  function syncCrewVisibility() {
-    const chosen = data.classById.get(klass.select.value);
-    const crewSize = klass.select.value === "__new__"
-      ? Number(newClassCrew.select.value)
-      : Number(chosen?.crew_size ?? 1);
+  function syncForClass() {
+    const chosen = classId ? data.classById.get(classId) : null;
+    const crewSize = chosen ? Number(chosen.crew_size ?? 1) : Number(newClassCrew.select.value);
     crewBlock.hidden = crewSize !== 2;
-    newClassBlock.hidden = klass.select.value !== "__new__";
+
+    boatPick.setItems([
+      { label: "— no hull —", row: null },
+      ...data.boats
+        .filter((b) => !classId || b.class_id === classId)
+        .map((b) => ({ label: boatLabel(b), row: b })),
+    ]);
   }
-  klass.select.addEventListener("change", syncCrewVisibility);
-  newClassCrew.select.addEventListener("change", syncCrewVisibility);
-  if (!data.classes.length) klass.select.value = "__new__";
-  syncCrewVisibility();
+  newClassCrew.select.addEventListener("change", syncForClass);
+  if (!data.classes.length) {
+    newClassBlock.hidden = false;
+    classPick.set("New class…");
+  }
+  syncForClass();
 
   const create = el("button.btn", {
     type: "button",
     text: "Sign on",
     onclick: async () => {
-      body.querySelectorAll(".notice").forEach((n) => n.remove());
+      body.querySelectorAll(":scope > .notice").forEach((n) => n.remove());
       create.disabled = true;
       try {
-        let classId = klass.select.value;
-        if (classId === "__new__") {
+        let chosenClassId = classId;
+        if (!chosenClassId) {
           const created = await reg.createClass({
             name: newClassName.input.value,
             basePy: newClassPy.input.value,
             crewSize: newClassCrew.select.value,
           });
-          classId = created.id;
+          chosenClassId = created.id;
         }
-        const klassRow = await db.get("classes", classId);
-        const helm = await reg.createMember({ name: helmName.input.value });
-        const crewText = crewBlock.hidden ? "" : crewName.input.value.trim();
-        const crew = crewText ? await reg.createMember({ name: crewText }) : null;
+        const klassRow = await db.get("classes", chosenClassId);
+
+        // A new member is created only when one was explicitly asked for.
+        const helm = helmId
+          ? await db.get("helms", helmId)
+          : await reg.createMember({ name: newHelmName });
+
+        let crew = null;
+        if (!crewBlock.hidden) {
+          if (crewId) crew = await db.get("helms", crewId);
+          else if (newCrewName.trim()) crew = await reg.createMember({ name: newCrewName });
+        }
 
         // A hull is only recorded when there is one worth recording.
         let boat = null;
-        const sail = sailNo.input.value.trim();
-        if (sail) boat = await reg.createBoat({ name: "", sailNo: sail, classId });
+        if (boatId) boat = await db.get("boats", boatId);
+        else if (newSail.input.value.trim()) {
+          boat = await reg.createBoat({
+            name: "",
+            sailNo: newSail.input.value.trim(),
+            classId: chosenClassId,
+          });
+        }
 
         await rd.addEntry({
           race: data.race,
@@ -411,8 +515,9 @@ function newCombinationForm(data) {
   });
 
   body.append(
-    klass.node, newClassBlock, memberOptions,
-    helmName.node, crewBlock, sailNo.node,
+    classPick.node, newClassBlock,
+    helmPick.node, crewBlock,
+    boatPick.node, newSailBlock,
     el("div.actions", {}, [create])
   );
   return body;

@@ -86,7 +86,7 @@ export const supabaseBackend = createSupabaseBackend({
  * none of it bounces straight back up the outbox.
  * ------------------------------------------------------------------------ */
 
-const REFERENCE_TABLES = ["classes", "boats", "helms", "checklist_templates"];
+const REFERENCE_TABLES = ["classes", "boats", "helms", "checklist_templates", "race_calendar"];
 
 export const LAST_REFRESHED_KEY = "reference_last_refreshed";
 

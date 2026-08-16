@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="NSC placeholder logo">
+  <title>NSC — placeholder</title>
+  <!-- PLACEHOLDER. Replace this file with the club's real logo, same path.
+       Square, 120x120 viewBox, displayed in a 40x40 box in the mast. -->
+  <rect width="120" height="120" fill="none" stroke="#9FC0F0" stroke-width="4" stroke-dasharray="8 6"/>
+  <text x="60" y="56" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
+        font-size="30" font-weight="bold" fill="#FFFFFF">NSC</text>
+  <text x="60" y="80" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
+        font-size="13" fill="#9FC0F0">LOGO</text>
+</svg>

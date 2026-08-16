@@ -168,7 +168,7 @@ export function marksCrossed(previousSeconds, currentSeconds) {
 /**
  * How a race is named on screen and in outputs.
  *
- *   named   "Race 2 — Whittaker Cup"
+ *   named   "Race 2 — Whitaker Cup"
  *   unnamed "Race 2"
  *
  * One function so the two forms can never drift apart between the sequence

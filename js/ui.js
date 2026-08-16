@@ -16,7 +16,7 @@ export function el(spec, props = {}, children = []) {
   if (classes.length) node.className = classes.join(" ");
 
   for (const [key, value] of Object.entries(props)) {
-    if (value == null || value === false) continue;
+    if (value == null) continue;
     if (key === "class") node.className = [node.className, value].filter(Boolean).join(" ");
     else if (key === "text") node.textContent = String(value);
     else if (key === "html") node.innerHTML = value; // only for our own markup
@@ -24,7 +24,14 @@ export function el(spec, props = {}, children = []) {
     else if (key.startsWith("on") && typeof value === "function") {
       node.addEventListener(key.slice(2).toLowerCase(), value);
     } else if (key in node && key !== "list" && typeof value !== "object") {
-      node[key] = value;
+      /* A boolean DOM property must be given a boolean. Assigning the STRING
+         "false" to node.spellcheck sets it true, because a non-empty string is
+         truthy — which is exactly how spellcheck="false" quietly became
+         spellcheck="true" on the picker's filter box. */
+      node[key] =
+        typeof node[key] === "boolean" ? value !== false && value !== "false" : value;
+    } else if (value === false) {
+      node.removeAttribute(key);
     } else {
       node.setAttribute(key, value === true ? "" : String(value));
     }
@@ -219,4 +226,163 @@ export function flash(container, message, tone = "info") {
   container.prepend(node);
   setTimeout(() => node.remove(), 5000);
   return node;
+}
+
+/* ---------------------------------------------------------------------------
+ * Register pickers
+ *
+ * Never a free-text box for choosing a person or a boat. A native text input
+ * invites the phone keyboard to offer half-remembered autofill suggestions,
+ * and tapping one signs on the wrong helm — which nobody notices until the
+ * results are wrong. So: a list of real register entries, filtered as you
+ * type, tap to select, and a deliberate "add new" path for someone genuinely
+ * new. The filter field itself has every autofill affordance switched off,
+ * because it is a search box and not a name.
+ * ------------------------------------------------------------------------ */
+
+/** Filter attributes that stop a keyboard trying to be helpful. */
+export const NO_AUTOFILL = {
+  autocomplete: "off",
+  autocorrect: "off",
+  autocapitalize: "off",
+  spellcheck: "false",
+  // A name browsers have no saved values for; "search" and "name" both attract
+  // autofill on iOS.
+  name: "filter-nsc",
+  "data-1p-ignore": "",
+  "data-lpignore": "true",
+};
+
+/**
+ * Open a picker sheet.
+ *
+ * @param {object} options
+ * @param {string} options.title
+ * @param {Array<{id, label, detail?}>} options.items
+ * @param {(item) => void} options.onPick
+ * @param {(text: string) => void} [options.onAddNew] given the filter text
+ * @param {string} [options.addLabel]
+ */
+export function openPicker({ title, items, onPick, onAddNew = null, addLabel = "Add new…" }) {
+  const scrim = el("div.sheetscrim.pickerscrim");
+  const close = () => scrim.remove();
+
+  const list = el("div.pickerlist");
+  const filter = el("input.searchbox.pickerfilter", {
+    type: "text",
+    ...NO_AUTOFILL,
+    placeholder: "Type to filter…",
+    "aria-label": `Filter ${title}`,
+    oninput: () => draw(),
+  });
+
+  function draw() {
+    const needle = filter.value.trim().toLowerCase();
+    clear(list);
+
+    const matches = items.filter(
+      (item) =>
+        !needle ||
+        `${item.label} ${item.detail ?? ""}`.toLowerCase().includes(needle)
+    );
+
+    for (const item of matches) {
+      list.append(
+        el("button.regrow.tappable", {
+          type: "button",
+          onclick: () => {
+            close();
+            onPick(item);
+          },
+        }, [
+          el("div.regmain", {}, [
+            el("div.regname", { text: item.label }),
+            item.detail ? el("div.regmeta", { text: item.detail }) : null,
+          ]),
+        ])
+      );
+    }
+
+    if (!matches.length) {
+      list.append(
+        el("div.empty", {}, [
+          el("p", {
+            text: needle ? `Nobody matching “${filter.value}”.` : "Nothing in the register yet.",
+          }),
+        ])
+      );
+    }
+
+    if (onAddNew) {
+      list.append(
+        el("button.regrow.tappable.addnewrow", {
+          type: "button",
+          onclick: () => {
+            const text = filter.value.trim();
+            close();
+            onAddNew(text);
+          },
+        }, [
+          el("div.regmain", {}, [
+            el("div.regname", { text: needle ? `${addLabel} “${filter.value.trim()}”` : addLabel }),
+            el("div.regmeta", { text: "Only for someone genuinely new" }),
+          ]),
+          el("span.addmark", { text: "+", "aria-hidden": "true" }),
+        ])
+      );
+    }
+  }
+
+  scrim.addEventListener("click", (event) => {
+    if (event.target === scrim) close();
+  });
+
+  scrim.append(
+    el("div.boatsheet.pickersheet", {}, [
+      el("div.eyebrow", { text: "Choose" }),
+      el("h2", { text: title }),
+      filter,
+      list,
+      el("div.actions", {}, [
+        el("button.btn.ghost", { type: "button", text: "Cancel", onclick: close }),
+      ]),
+    ])
+  );
+
+  draw();
+  document.body.append(scrim);
+  // Do NOT autofocus: a keyboard springing up covers the list on a phone, and
+  // most choices are a single tap from the top of a short register.
+  return { close };
+}
+
+/**
+ * A labelled control that opens a picker. Reads as a field, behaves as a
+ * button — there is no text input to mistype into.
+ */
+export function pickerField(label, { value = null, placeholder = "Choose…", ...pickerOptions }) {
+  // Held in a variable so setItems() can narrow the list later — a hull picker
+  // shows only the chosen class's boats, and the class is chosen after it.
+  let options = pickerOptions;
+
+  const button = el("button.pickerbutton", {
+    type: "button",
+    onclick: () => openPicker({ title: label, ...options }),
+  }, [
+    el("span.pickervalue", { text: value ?? placeholder, class: value ? "" : "empty" }),
+    el("span.pickerchevron", { text: "▾", "aria-hidden": "true" }),
+  ]);
+
+  return {
+    button,
+    node: el("div.field", {}, [el("label", { text: label }), button]),
+    set(text) {
+      const span = button.querySelector(".pickervalue");
+      span.textContent = text ?? placeholder;
+      span.classList.toggle("empty", !text);
+    },
+    setItems(items) {
+      options = { ...options, items };
+    },
+  };
 }

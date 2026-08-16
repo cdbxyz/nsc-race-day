@@ -64,3 +64,18 @@ Hard rules:
   commit — the server refuses unknown values and the row quarantines.
 - Never use native blocking dialogs (alert/confirm/prompt). Inline
   sheets and tap-to-arm patterns only.
+- **A register entity is CHOSEN, never typed.** Anywhere the user picks a
+  helm, crew, class, boat or programme race, use `pickerField` /
+  `openPicker` from ui.js: filter-as-you-type over what already exists,
+  with adding something new as a separate, deliberate tap. Free-text boxes
+  with a `<datalist>` are not acceptable — the phone keyboard's own autofill
+  sits above the suggestions, a wet thumb takes the wrong one, and the
+  register gains a duplicate person. Every duplicate splits a handicap
+  history, which is the one thing this app must not get wrong. Filter inputs
+  spread `NO_AUTOFILL`.
+- **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
+  8-point compass direction it blows FROM. Beaufort because it is what an
+  OOD can judge by eye from the beach without an anemometer, and what the
+  club's own race reports already use. Captured on the start-sequence page,
+  editable on results until publish, and carried into the results sheet,
+  PDF and CSV.

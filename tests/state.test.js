@@ -673,7 +673,7 @@ test("an abandoned race is not an ended one", () => {
  * ------------------------------------------------------------------------ */
 
 test("a named race shows its name alongside the number", () => {
-  assert.equal(raceLabel({ number: 1, name: "Whittaker Cup" }), "Race 1 — Whittaker Cup");
+  assert.equal(raceLabel({ number: 1, name: "Whitaker Cup" }), "Race 1 — Whitaker Cup");
   assert.equal(raceLabel({ number: 3, name: "Commodore's Trophy" }), "Race 3 — Commodore's Trophy");
 });
 
@@ -689,8 +689,8 @@ test("a name of only spaces counts as unnamed", () => {
 });
 
 test("a name is trimmed for display", () => {
-  assert.equal(raceLabel({ number: 1, name: "  Whittaker Cup  " }), "Race 1 — Whittaker Cup");
-  assert.equal(raceName({ number: 1, name: "  Whittaker Cup  " }), "Whittaker Cup");
+  assert.equal(raceLabel({ number: 1, name: "  Whitaker Cup  " }), "Race 1 — Whitaker Cup");
+  assert.equal(raceName({ number: 1, name: "  Whitaker Cup  " }), "Whitaker Cup");
 });
 
 test("a missing race does not produce a broken label", () => {

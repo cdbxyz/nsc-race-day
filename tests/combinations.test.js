@@ -230,3 +230,24 @@ test("everyone aboard is counted, not just the boat", () => {
   assert.equal(entryPeople({ helm }).length, 1);
   assert.equal(entryPeople({}).length, 0);
 });
+
+/* A hull recorded as a sail number and nothing else.
+ *
+ * This is the common case at sign-on, not an edge one: the form asks for a
+ * sail number and never for a hull name, so `name` is stored null. listBoats()
+ * sorted on a.name.localeCompare(b.name) and threw on the first such boat,
+ * which took the whole sign-on page down with it.
+ */
+test("a hull with only a sail number can be listed", async () => {
+  const klass = await reg.createClass({ name: "Solo", basePy: 1142 });
+  await reg.createBoat({ name: "", sailNo: "5721", classId: klass.id });
+  await reg.createBoat({ name: "Kittiwake", sailNo: "", classId: klass.id });
+
+  const boats = await reg.listBoats();
+  assert.equal(boats.length, 2);
+  assert.deepEqual(
+    boats.map((b) => b.sail_no ?? b.name),
+    ["5721", "Kittiwake"],
+    "sorted on what is shown, not on a name that may not exist"
+  );
+});

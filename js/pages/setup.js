@@ -6,8 +6,11 @@
  * somewhere to put entries.
  */
 
-import { el, clear, field, selectField, panel, notice, datalist } from "./../ui.js";
+import {
+  el, clear, field, selectField, panel, notice, datalist, pickerField,
+} from "./../ui.js";
 import { raceLabel } from "./../state.js";
+import * as cal from "./../calendar.js";
 import * as rd from "./../raceday.js";
 import { navigate } from "./../router.js";
 
@@ -57,11 +60,87 @@ async function render() {
   });
   // One race by default: most days are one, and adding another is a tap.
   const races = field("Races planned", { type: "number", min: 1, max: 10, value: 1, inputMode: "numeric" });
-  const raceName = field("Race name (optional)", {
-    class: "text",
-    autocomplete: "off",
-    placeholder: "e.g. Whittaker Cup",
+  /* The race name comes off the season programme rather than out of someone's
+     memory: a trophy spelled three ways across three years is a trophy nobody
+     can search for. Free text is still allowed — the programme is a draft —
+     but it is the second option, not the first. */
+  const programme = await cal.listCalendar();
+
+  let chosenName = "";
+  let chosenPursuit = false;
+
+  /* v1 scores handicap starts only. A pursuit race is a different format
+     altogether, so we say so plainly and point at the club's calculator. */
+  const pursuitNote = el("div", { hidden: true });
+  function paintPursuit() {
+    clear(pursuitNote);
+    pursuitNote.hidden = !chosenPursuit;
+    if (!chosenPursuit) return;
+    const n = notice("", "error");
+    n.append(
+      el("span", {
+        text: `${chosenName} is a PURSUIT race. This app scores handicap starts only — use the club calculator: `,
+      }),
+      el("a.linkish.pursuitlink", {
+        href: cal.PURSUIT_CALCULATOR_URL,
+        target: "_blank",
+        rel: "noopener",
+        text: "nsc-race-calc",
+      })
+    );
+    pursuitNote.append(n);
+  }
+
+  const namePicker = pickerField("Race name (optional)", {
+    placeholder: "Choose from the programme…",
+    items: programme.map((r) => ({
+      label: r.name,
+      detail: `${r.date} · ${cal.shortTime(r.start_time)}${r.is_pursuit ? " · PURSUIT" : ""}`,
+      row: r,
+    })),
+    addLabel: "Use a name not on the programme…",
+    onPick: (item) => {
+      chosenName = item.row.name;
+      chosenPursuit = !!item.row.is_pursuit;
+      namePicker.set(chosenName);
+      paintPursuit();
+    },
+    onAddNew: (text) => {
+      chosenName = text;
+      chosenPursuit = false;
+      namePicker.set(chosenName || null);
+      paintPursuit();
+    },
   });
+
+  /* The programme entry for the chosen date is the overwhelmingly likely
+     answer, so it is preselected — but shown, not hidden, so a wrong guess is
+     obvious. Two races share 8 and 11 August, and on those days we name both
+     and preselect neither: guessing which one is being sailed first would be
+     worse than asking. */
+  const dayNote = el("div", { hidden: true });
+  async function paintDay() {
+    const races = await cal.racesOn(date.input.value);
+    clear(dayNote);
+    dayNote.hidden = races.length === 0;
+    if (races.length) {
+      dayNote.append(
+        notice(
+          `Programme: ${races
+            .map((r) => `${r.name} ${cal.shortTime(r.start_time)}`)
+            .join(" · ")}`,
+          "info"
+        )
+      );
+    }
+    if (races.length === 1) {
+      chosenName = races[0].name;
+      chosenPursuit = !!races[0].is_pursuit;
+      namePicker.set(chosenName);
+      paintPursuit();
+    }
+  }
+  date.input.addEventListener("change", () => paintDay());
 
   const seriesOptions = [
     { value: "", label: "— no series —" },
@@ -88,7 +167,9 @@ async function render() {
     type: "button",
     text: "Start race day",
     onclick: async () => {
-      body.querySelectorAll(".notice").forEach((n) => n.remove());
+      // Only the errors this button put there — not the programme or
+      // pursuit notices, which are part of the form.
+      body.querySelectorAll(":scope > .notice").forEach((n) => n.remove());
       start.disabled = true;
       try {
         let seriesId = seriesPick.select.value || null;
@@ -104,7 +185,8 @@ async function render() {
           oodName: ood.input.value,
           ro1Name: ro1.input.value,
           ro2Name: ro2.input.value,
-          raceName: raceName.input.value,
+          raceName: chosenName,
+          isPursuit: chosenPursuit,
           seriesId,
           raceCount: races.input.value,
         });
@@ -118,6 +200,7 @@ async function render() {
 
   body.append(
     datalist(suggestionsId, names),
+    dayNote,
     date.node,
     ood.node,
     ro1.node,
@@ -125,13 +208,15 @@ async function render() {
     seriesPick.node,
     newSeriesBlock,
     races.node,
-    raceName.node
+    namePicker.node,
+    pursuitNote
   );
 
   clear(host).append(
     panel("Step 0 · Race day", [body, el("div.actions", {}, [start])]),
     registersLink()
   );
+  await paintDay();
 }
 
 async function alreadyOpenPanel(day) {
@@ -159,7 +244,7 @@ async function alreadyOpenPanel(day) {
   const addName = field("Name (optional)", {
     class: "text",
     autocomplete: "off",
-    placeholder: "e.g. Whittaker Cup",
+    placeholder: "e.g. Whitaker Cup",
   });
 
   const add = el("button.btn.ghost", {
@@ -201,7 +286,7 @@ function renameRace(race) {
     class: "text",
     autocomplete: "off",
     value: race.name ?? "",
-    placeholder: "e.g. Whittaker Cup",
+    placeholder: "e.g. Whitaker Cup",
   });
   body.append(
     name.node,
@@ -230,6 +315,25 @@ export function dutyLine(day) {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** v1 scores handicap races only — say so before the day, not on the water. */
+export function pursuitWarning() {
+  const box = notice(
+    "Pursuit start — this app cannot run one. Use the club's pursuit calculator on the day.",
+    "error"
+  );
+  box.append(
+    el("div", {}, [
+      el("a.pursuitlink", {
+        href: cal.PURSUIT_CALCULATOR_URL,
+        target: "_blank",
+        rel: "noopener",
+        text: "cdbxyz.github.io/nsc-race-calc",
+      }),
+    ])
+  );
+  return box;
 }
 
 function registersLink() {

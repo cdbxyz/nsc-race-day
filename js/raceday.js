@@ -103,6 +103,7 @@ export async function createRaceDay({
   ro1Name,
   ro2Name,
   raceName = "",
+  isPursuit = false,
   seriesId = null,
   raceCount = 1,
   fastLaps = 3,
@@ -132,6 +133,7 @@ export async function createRaceDay({
       number,
       // Only the first race is named at setup; the rest are nameable later.
       name: number === 1 ? String(raceName ?? "").trim() || null : null,
+      is_pursuit: number === 1 ? Boolean(isPursuit) : false,
       status: "setup",
       sequence_start_at: null,
       start_at: null,
@@ -167,10 +169,22 @@ export async function addRace(raceDay, { name = "" } = {}) {
     start_at: null,
     fast_laps: previous?.fast_laps ?? 3,
     slow_laps: previous?.slow_laps ?? 2,
+    is_pursuit: false,
     published_at: null,
   };
   await db.localWrite("races", race);
   return race;
+}
+
+/** Wind is per race: two races on one afternoon can be quite different. */
+export async function setRaceWind(race, { direction = null, force = null } = {}) {
+  const row = {
+    ...race,
+    wind_direction: direction || null,
+    wind_force: force === "" || force == null ? null : Number(force),
+  };
+  await db.localWrite("races", row);
+  return row;
 }
 
 /** Name or rename a race. Race-level data, so it syncs like any other row. */

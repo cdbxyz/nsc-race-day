@@ -61,7 +61,7 @@ body{
   padding:calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));
   display:flex;align-items:center;gap:12px;
 }
-.mast .brand{min-width:0;flex:1}
+.mast .brand{min-width:0;flex:1;display:block}
 .mast .eyebrow{color:#9FC0F0}
 .mast h1{color:#fff;font-size:1.5rem;margin:0;white-space:nowrap}
 .mast h1 .thin{color:#B9CCEA;font-weight:500}
@@ -562,3 +562,101 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 }
 .racenamefield::placeholder{color:#9FC0F0;font-weight:500}
 .racenamefield:focus-visible{outline:2px solid #9FC0F0;outline-offset:-1px}
+
+/* ---- register pickers ----
+   A field that is a button: there is no text input to mistype a helm into. */
+.pickerbutton{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:48px;
+  padding:10px 12px;cursor:pointer;text-align:left;
+  border:1px solid var(--line);border-radius:2px;background:var(--chalk);color:var(--ink);
+  font-family:var(--body);font-size:16px;
+}
+.pickerbutton:active{background:var(--mist)}
+.pickerbutton:focus-visible{outline:2px solid var(--hull);outline-offset:-1px}
+.pickervalue{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.pickervalue.empty{color:var(--slate);font-weight:400}
+.pickerchevron{flex:none;color:var(--slate)}
+.pickersheet{max-height:88vh}
+.pickerfilter{margin-bottom:2px}
+.pickerlist{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:2px}
+.addnewrow{border-top:2px solid var(--line);background:#F8FAFE}
+.addnewrow .regname{color:var(--hull)}
+
+/* ---- wind ---- */
+.compass{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.compassbtn{
+  min-height:48px;cursor:pointer;border:1px solid var(--line);border-radius:2px;
+  background:var(--chalk);color:var(--ink);
+  font-family:var(--disp);font-weight:600;letter-spacing:.08em;font-size:.9rem;
+}
+.compassbtn[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.windline{font-family:var(--mono);font-size:.78rem;color:var(--slate);font-variant-numeric:tabular-nums}
+
+/* ---- mast logo ----
+   40x40 box. Drop a real asset at img/nsc-logo.svg and nothing moves. */
+.mast-home{
+  display:flex;align-items:center;gap:10px;flex:1;min-width:0;
+  background:none;border:none;padding:0;cursor:pointer;text-align:left;color:inherit;
+}
+.mast-home:focus-visible{outline:2px solid #9FC0F0;outline-offset:3px}
+.mastlogo{
+  flex:none;width:40px;height:40px;border-radius:2px;
+  object-fit:contain;background:rgba(255,255,255,.08);
+}
+
+/* ---- start sequence flag imagery ----
+   96x64 box per flag. Drop real assets at img/flags/*.svg. */
+/* All four flags must be visible at once — an OOD glances at this mid-sequence
+   and must not have to scroll to find out what is flying. So the cards SHRINK
+   to fit 390px rather than overflowing the panel, keeping their 3:2 shape. */
+.flagstrip{display:flex;align-items:flex-start;justify-content:center;gap:8px;margin:10px 0 2px;min-width:0}
+.flagcard{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  flex:1 1 0;min-width:0;max-width:96px;
+  opacity:.35;transition:opacity .2s ease;
+}
+.flagcard.on{opacity:1}
+.flagimg{
+  width:100%;max-width:96px;aspect-ratio:3/2;height:auto;object-fit:contain;
+  border:1px solid rgba(255,255,255,.35);border-radius:2px;background:rgba(255,255,255,.08);
+}
+.flagcap{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;
+  font-size:.58rem;font-weight:600;color:rgba(255,255,255,.85);
+  text-align:center;line-height:1.25;
+}
+
+/* ---- homepage ---- */
+.homehero{
+  background:var(--ink);color:#fff;border-radius:3px;padding:16px;margin-top:14px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.homehero .eyebrow{color:#9FC0F0}
+.homehero-title{font-family:var(--disp);text-transform:uppercase;font-weight:700;font-size:1.9rem;line-height:1.05}
+.homehero .regmeta{color:#B9CCEA}
+.hometiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.hometile{
+  display:flex;flex-direction:column;gap:3px;align-items:flex-start;
+  min-height:76px;padding:12px;cursor:pointer;text-align:left;
+  border:1px solid var(--line);border-radius:3px;background:var(--chalk);color:var(--ink);
+}
+.hometile:active{background:var(--mist)}
+.hometile-name{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:.9rem}
+.hometile-note{font-size:.74rem;color:var(--slate);line-height:1.3}
+
+/* ---- date field: keep it inside its box on a 390px phone ---- */
+.field input[type="date"]{
+  width:100%;min-width:0;max-width:100%;
+  font-family:var(--mono);font-size:16px;
+  /* iOS gives date inputs an intrinsic width that overflows a narrow field. */
+  -webkit-appearance:none;appearance:none;
+}
+.pursuitlink{
+  display:inline-block;margin-top:6px;font-family:var(--mono);font-size:.78rem;
+  color:var(--flag);text-underline-offset:3px;
+}
+.windpicker{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.windlabel{font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-size:.68rem;font-weight:600;color:var(--slate)}
+/* A lowered flag is NOT an upside-down flag. Rotating the artwork would be a
+   false picture of what is on the flagpole, so the stage is carried by the
+   caption ("P DOWN · 1:00") and the strip's own highlighting instead. */

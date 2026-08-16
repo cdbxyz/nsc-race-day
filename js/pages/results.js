@@ -15,6 +15,7 @@ import * as log from "./../raceevents.js";
 import { resultInputs, correctionFor, raceLabel, raceName, entryLabel, entryDetail } from "./../state.js";
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
 import { savePdf } from "./../pdf.js";
+import { COMPASS, FORCES, windText, windShort } from "./../wind.js";
 import { navigate } from "./../router.js";
 import { dutyLine } from "./setup.js";
 
@@ -115,6 +116,7 @@ function render() {
   const node = el("div");
   if (rd.isTestDay(context.raceDay)) node.append(testDataBanner());
   node.append(headerPanel());
+  node.append(windPanel());
   node.append(resultsPanel());
   if (correcting) node.append(correctionSheet());
   node.append(exportPanel());
@@ -139,7 +141,7 @@ function headerPanel() {
   ]);
 
   /* Naming a race is usually an afterthought — someone remembers it was the
-     Whittaker Cup while the results are on screen. Editable until publish,
+     Whitaker Cup while the results are on screen. Editable until publish,
      which is the point the sheet becomes the record. */
   if (!published) {
     const nameBox = el("input.racenamefield", {
@@ -251,6 +253,70 @@ function footnote() {
         `Points use the RRS low-point system: a finisher scores its place (tied boats share the average), and any coded boat scores starters + 1 = ${results.penalty}.`,
     }),
   ]);
+}
+
+/* ---- wind ---------------------------------------------------------------
+ * Per race, because two races on one afternoon can be sailed in quite
+ * different conditions and the sheet should say which.
+ * ---------------------------------------------------------------------- */
+
+function windPanel() {
+  const { race } = context;
+  const editable = race.status !== "published";
+  const recorded = windText(race);
+
+  if (!editable) {
+    return panel("Wind", [
+      el("div.panel-body", {}, [
+        el("div.windline", { text: recorded ?? "Not recorded" }),
+      ]),
+    ]);
+  }
+
+  const body = el("div.panel-body.windpicker");
+  let direction = race.wind_direction ?? null;
+  let force = race.wind_force ?? null;
+  const summary = el("div.windline", { text: recorded ?? "Not recorded" });
+
+  const compass = el("div.compass");
+  for (const point of COMPASS) {
+    compass.append(
+      el("button.compassbtn", {
+        type: "button",
+        text: point,
+        "aria-pressed": String(direction === point),
+        onclick: async () => {
+          direction = direction === point ? null : point;
+          for (const b of compass.children) {
+            b.setAttribute("aria-pressed", String(b.textContent === direction));
+          }
+          context.race = await rd.setRaceWind(context.race, { direction, force });
+          summary.textContent = windText(context.race) ?? "Not recorded";
+        },
+      })
+    );
+  }
+
+  const forcePick = selectField(
+    "Strength",
+    [{ value: "", label: "— not recorded —" },
+     ...FORCES.map(([n, name]) => ({ value: String(n), label: `F${n} · ${name}` }))],
+    {}
+  );
+  forcePick.select.value = force == null ? "" : String(force);
+  forcePick.select.addEventListener("change", async () => {
+    force = forcePick.select.value === "" ? null : Number(forcePick.select.value);
+    context.race = await rd.setRaceWind(context.race, { direction, force });
+    summary.textContent = windText(context.race) ?? "Not recorded";
+  });
+
+  body.append(
+    el("label.windlabel", { text: "Wind direction (from)" }),
+    compass,
+    forcePick.node,
+    summary
+  );
+  return panel("Wind", [body]);
 }
 
 /* ---- corrections -------------------------------------------------------- */
@@ -368,6 +434,7 @@ function exportPanel() {
     `${raceDay.date}`,
     series ? `${series.name} ${series.season}` : null,
     dutyLine(raceDay),
+    windText(race) ? `Wind ${windText(race)}` : null,
     rd.isTestDay(raceDay) ? "TEST DATA — not a real race" : null,
     `Max laps ${context.results.maxLaps}`,
     `${context.results.starters} starters`,
@@ -439,6 +506,7 @@ function toCsv() {
   const title = [
     `${raceLabel(race)}`,
     raceDay.date,
+    windShort(race) ? `Wind ${windShort(race)}` : null,
     rd.isTestDay(raceDay) ? "TEST DATA — not a real race" : null,
   ]
     .filter(Boolean)

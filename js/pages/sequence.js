@@ -8,12 +8,14 @@
  * Visual only. The horn is the real signal; this is the thing beside it.
  */
 
-import { el, clear, panel, notice, field, armedButton, onArmChange } from "./../ui.js";
+import { el, clear, panel, notice, field, selectField, armedButton, onArmChange } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
 import { sequenceState, countdown, marksCrossed, raceLabel, scaledNow, SEQUENCE_MS } from "./../state.js";
 import { sequenceSpeed, isFastClock, onSpeedChange } from "./../devclock.js";
+import { COMPASS, FORCES, windText } from "./../wind.js";
+import { PURSUIT_CALCULATOR_URL } from "./../calendar.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
 import { navigate } from "./../router.js";
 
@@ -101,6 +103,12 @@ function tick() {
   live.clock.textContent = clock.display;
   live.flag.textContent = clock.phase.label;
   live.panel.className = `countdown tone-${clock.phase.tone}`;
+  // Only the highlight moves; the images are not rebuilt four times a second.
+  const active = FLAG_STAGES.reduce(
+    (best, stage, index) => (clock.remainingSeconds <= stage.at ? index : best),
+    0
+  );
+  [...live.flags.children].forEach((card, index) => card.classList.toggle("on", index === active));
 }
 
 function render() {
@@ -157,12 +165,15 @@ function armPanel(race, entries, sequence) {
     body.append(notice("Sequence postponed (AP). Start again when the fleet is ready.", "info"));
   }
   if (isFastClock()) body.append(testClockNotice());
+  if (race.is_pursuit) body.append(pursuitNotice());
   body.append(
     el("div.regname", { text: `${raceLabel(race)} · ${entries.length} boats signed on` }),
     el("p.stub", {
       text: "Ten minutes from the tap: class flag at 10, P flag at 5, P down at 1, start at 0. The phone is a visual aid — the horn is the signal.",
     })
   );
+
+  body.append(windPicker(race));
 
   const start = el("button.btn.bigstart", {
     type: "button",
@@ -194,10 +205,13 @@ function countdownPanel(race, clock, sequence) {
   const clockNode = el("div.cd-clock", { text: clock.display });
   const flagNode = el("div.cd-flag", { text: phase.label });
 
+  const flagsNode = flagStrip(clock.remainingSeconds);
+
   const wrap = el(`div.countdown.tone-${phase.tone}`, {}, [
     el("div.eyebrow", { text: raceLabel(race) }),
     clockNode,
     flagNode,
+    flagsNode,
     sequence.generalRecalls
       ? el("div.cd-note", {
           text: `${sequence.generalRecalls} general recall${sequence.generalRecalls === 1 ? "" : "s"}`,
@@ -234,10 +248,97 @@ function countdownPanel(race, clock, sequence) {
     }),
   ]);
 
-  live = { clock: clockNode, flag: flagNode, panel: wrap };
+  live = { clock: clockNode, flag: flagNode, panel: wrap, flags: flagsNode };
   const parts = [wrap, controls];
   if (isFastClock()) parts.unshift(testClockNotice());
   return el("div", {}, parts);
+}
+
+/** Conditions are captured before the gun, while someone is looking at them. */
+function windPicker(race) {
+  const wrap = el("div.windpicker");
+  let direction = race.wind_direction ?? null;
+  let force = race.wind_force ?? null;
+
+  const summary = el("div.windline", { text: windText(race) ?? "Wind not recorded" });
+
+  const compass = el("div.compass");
+  for (const point of COMPASS) {
+    const button = el("button.compassbtn", {
+      type: "button",
+      text: point,
+      "aria-pressed": String(direction === point),
+      onclick: async () => {
+        direction = direction === point ? null : point;
+        for (const b of compass.children) {
+          b.setAttribute("aria-pressed", String(b.textContent === direction));
+        }
+        context.race = await rd.setRaceWind(context.race, { direction, force });
+        summary.textContent = windText(context.race) ?? "Wind not recorded";
+      },
+    });
+    compass.append(button);
+  }
+
+  const forcePick = selectField(
+    "Strength",
+    [{ value: "", label: "— not recorded —" },
+     ...FORCES.map(([n, name]) => ({ value: String(n), label: `F${n} · ${name}` }))],
+    { value: force == null ? "" : String(force) }
+  );
+  forcePick.select.value = force == null ? "" : String(force);
+  forcePick.select.addEventListener("change", async () => {
+    force = forcePick.select.value === "" ? null : Number(forcePick.select.value);
+    context.race = await rd.setRaceWind(context.race, { direction, force });
+    summary.textContent = windText(context.race) ?? "Wind not recorded";
+  });
+
+  wrap.append(
+    el("label.windlabel", { text: "Wind direction (from)" }),
+    compass,
+    forcePick.node,
+    summary
+  );
+  return wrap;
+}
+
+function pursuitNotice() {
+  const box = notice(
+    "Pursuit start — this app cannot run one. Use the club's pursuit calculator instead.",
+    "error"
+  );
+  box.append(el("a.pursuitlink", {
+    href: PURSUIT_CALCULATOR_URL, target: "_blank", rel: "noopener",
+    text: "cdbxyz.github.io/nsc-race-calc",
+  }));
+  return box;
+}
+
+/* The flags the OOD should have up. Placeholder artwork lives in img/flags/
+   and is sized so real assets drop straight in. */
+const FLAG_STAGES = [
+  { at: 600, src: "img/flags/class.svg", cap: "Class · 10:00" },
+  { at: 300, src: "img/flags/p.svg", cap: "P up · 5:00" },
+  { at: 60, src: "img/flags/p.svg", cap: "P down · 1:00", down: true },
+  { at: 0, src: "img/flags/start.svg", cap: "Start · 0:00" },
+];
+
+function flagStrip(remainingSeconds) {
+  const strip = el("div.flagstrip");
+  // The stage in force is the last mark already reached.
+  const activeIndex = FLAG_STAGES.reduce(
+    (best, stage, index) => (remainingSeconds <= stage.at ? index : best),
+    0
+  );
+  FLAG_STAGES.forEach((stage, index) => {
+    strip.append(
+      el(`div.flagcard${index === activeIndex ? ".on" : ""}${stage.down ? ".down" : ""}`, {}, [
+        el("img.flagimg", { src: stage.src, alt: "" }),
+        el("span.flagcap", { text: stage.cap }),
+      ])
+    );
+  });
+  return strip;
 }
 
 /** Impossible to miss: a race started now is not a real one. */

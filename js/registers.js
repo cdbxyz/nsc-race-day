@@ -139,10 +139,14 @@ export async function seedClassesFromCsv(text) {
 export async function listBoats() {
   const [boats, classes] = await Promise.all([db.getAll("boats"), db.getAll("classes")]);
   const byId = new Map(classes.map((c) => [c.id, c]));
+  /* A hull may legitimately have no name at all — most are recorded as a sail
+     number and nothing else — so sort on what a human actually reads, and
+     never assume `name` is a string. */
+  const sortKey = (b) => `${b.name ?? ""} ${b.sail_no ?? ""}`.trim();
   return boats
     .filter((b) => b.active !== false)
     .map((b) => ({ ...b, klass: byId.get(b.class_id) ?? null }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 }
 
 export async function createBoat({ name, sailNo, classId }) {

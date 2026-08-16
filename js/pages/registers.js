@@ -6,6 +6,7 @@
 
 import { el, clear, field, selectField, panel, notice } from "./../ui.js";
 import * as reg from "./../registers.js";
+import * as cal from "./../calendar.js";
 
 let host = null;
 let tab = "boats";
@@ -32,12 +33,14 @@ async function render() {
       tabButton("boats", "Boats"),
       tabButton("helms", "Helms"),
       tabButton("classes", "Classes"),
+      tabButton("calendar", "Calendar"),
     ])
   );
 
   if (tab === "boats") node.append(await boatsPanel());
   if (tab === "helms") node.append(await helmsPanel());
   if (tab === "classes") node.append(await classesPanel());
+  if (tab === "calendar") node.append(await calendarPanel());
 
   clear(host).append(node);
 }
@@ -144,6 +147,77 @@ async function helmsPanel() {
   if (!helms.length) list.append(el("div.empty", {}, [el("p", { text: "No helms yet." })]));
 
   return panel("Helms", [body, list], { count: `${helms.length}` });
+}
+
+/* ---- season programme ---------------------------------------------------
+ * A draft committee proposal, so every row is editable here. Two races can
+ * share a date; a pursuit race is flagged because v1 cannot run one.
+ * ---------------------------------------------------------------------- */
+
+async function calendarPanel() {
+  const season = new Date().getFullYear();
+  const entries = await cal.listCalendar();
+  const body = el("div.panel-body");
+
+  const date = field("Date", { type: "date" });
+  const name = field("Race name", { class: "text", autocomplete: "off" });
+  const time = field("Start time", { type: "time", value: "14:00" });
+  const pursuit = selectField("Format", [
+    { value: "", label: "Handicap" },
+    { value: "1", label: "Pursuit (not supported in v1)" },
+  ]);
+  const add = el("button.btn", {
+    type: "button",
+    text: "Add to programme",
+    onclick: () =>
+      attempt(
+        () => cal.createCalendarEntry({
+          season, date: date.input.value, name: name.input.value,
+          startTime: time.input.value, isPursuit: pursuit.select.value === "1",
+        }),
+        body
+      ),
+  });
+  body.append(date.node, name.node, time.node, pursuit.node, el("div.actions", {}, [add]));
+
+  const list = el("div.reglist");
+  let lastDate = null;
+  for (const entry of entries) {
+    const sameDay = entry.date === lastDate;
+    lastDate = entry.date;
+    list.append(
+      el("div.regrow", {}, [
+        el("div.regmain", {}, [
+          el("div.regname", { text: entry.name }),
+          el("div.regmeta", {
+            text: [
+              sameDay ? "same day" : formatDay(entry.date),
+              cal.shortTime(entry.start_time),
+              entry.is_pursuit ? "PURSUIT — not supported" : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          }),
+        ]),
+        el("button.kill", {
+          type: "button",
+          text: "Remove",
+          onclick: () => attempt(() => cal.removeCalendarEntry(entry.id), list),
+        }),
+      ])
+    );
+  }
+  if (!entries.length) {
+    list.append(el("div.empty", {}, [el("p", { text: "No programme yet." })]));
+  }
+
+  return panel("Season programme", [body, list], { count: `${entries.length}` });
+}
+
+function formatDay(iso) {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 }
 
 /* ---- classes ------------------------------------------------------------ */

@@ -33,6 +33,7 @@ function fakeServer({ wins = [] } = {}) {
     boats: [{ id: "b1", name: "Vaila", class_id: "c1", active: true }],
     helms: [{ id: HAMISH, name: "Hamish" }],
     checklist_templates: [],
+    race_calendar: [{ id: "cal1", season: 2026, date: "2026-08-02", name: "Whitaker Cup", start_time: "14:00" }],
     helm_season_wins: wins,
   };
   return {
@@ -124,7 +125,8 @@ test("the real refresh writes every register plus the wins cache", async () => {
   const { counts } = await refreshWith(server);
 
   assert.deepEqual(counts, {
-    classes: 1, boats: 1, helms: 1, checklist_templates: 0, helm_season_wins: 1,
+    classes: 1, boats: 1, helms: 1, checklist_templates: 0, race_calendar: 1,
+    helm_season_wins: 1,
   });
   assert.equal((await db.getAll("boats")).length, 1, "registers land in IndexedDB");
 

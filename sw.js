@@ -10,7 +10,7 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "51a5491ec704";
+const VERSION = "29590ad972d2";
 const SHELL = [
   "./",
   "./css/app.css",
@@ -27,11 +27,13 @@ const SHELL = [
   "./index.html",
   "./js/app.js",
   "./js/backend.js",
+  "./js/calendar.js",
   "./js/db.js",
   "./js/devclock.js",
   "./js/handicap.js",
   "./js/pages/checklist.js",
   "./js/pages/dev.js",
+  "./js/pages/home.js",
   "./js/pages/live.js",
   "./js/pages/registers.js",
   "./js/pages/results.js",
@@ -53,6 +55,7 @@ const SHELL = [
   "./js/ui.js",
   "./js/update.js",
   "./js/wakelock.js",
+  "./js/wind.js",
   "./manifest.json",
 ];
 /* END GENERATED */

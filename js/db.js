@@ -11,7 +11,7 @@
  */
 
 const DB_NAME = "nsc-race-day";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /* Table stores mirror the Supabase schema in ARCHITECTURE.md section 4.
    Everything here is keyed on a client-generated UUID, which is also the
@@ -27,6 +27,7 @@ export const TABLES = [
   "race_events",
   "checklist_templates",
   "checklist_runs",
+  "race_calendar",
 ];
 
 const INDEXES = {
@@ -36,6 +37,7 @@ const INDEXES = {
   entries: { by_race: "race_id", by_boat: "boat_id" },
   race_events: { by_race: "race_id", by_occurred_at: "occurred_at" },
   checklist_runs: { by_race_day: "race_day_id" },
+  race_calendar: { by_season: "season", by_date: "date" },
 };
 
 /* Test seam. Tests set beforeCommit to make the transaction fail after both

@@ -14,6 +14,7 @@ import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
 import { startUpdateWatch, createUpdatePrompt, canPromptNow } from "./update.js";
 
+import home from "./pages/home.js";
 import setup from "./pages/setup.js";
 import registers from "./pages/registers.js";
 import signon from "./pages/signon.js";
@@ -24,7 +25,7 @@ import results from "./pages/results.js";
 import standdown from "./pages/standdown.js";
 import dev from "./pages/dev.js";
 
-const PAGES = { setup, registers, signon, checklist, sequence, live, results, standdown, dev };
+const PAGES = { home, setup, registers, signon, checklist, sequence, live, results, standdown, dev };
 
 let router;
 let updatePrompt;
@@ -40,6 +41,7 @@ async function boot() {
   sync.start();
 
   wireSyncSheet();
+  document.getElementById("mast-home").addEventListener("click", () => router.navigate("home"));
 
   pinPrompt = createPinPrompt(document.getElementById("pin-dialog"), {
     onSignedIn: () => {
@@ -59,7 +61,7 @@ async function boot() {
     if (!section) throw new Error(`no section for page "${name}"`);
     routes[name] = { section, page };
   }
-  router = createRouter(routes, { fallback: "setup", onChange: refreshUpdateAllowed });
+  router = createRouter(routes, { fallback: "home", onChange: refreshUpdateAllowed });
   router.start();
 
   // Race state changes are writes, so this catches a race starting or
