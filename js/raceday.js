@@ -63,6 +63,22 @@ export async function latestRaceDay() {
   return days[0];
 }
 
+/**
+ * Brand a race day as test data. Set when a sequence is started on the dev
+ * fast clock, never cleared by the app: a ten-second race must not be
+ * mistaken for a real one months later by someone reading the season.
+ */
+export async function markRaceDayAsTest(raceDay) {
+  if (!raceDay || raceDay.is_test_data) return raceDay;
+  const row = { ...raceDay, is_test_data: true };
+  await db.localWrite("race_days", row);
+  return row;
+}
+
+export function isTestDay(raceDay) {
+  return Boolean(raceDay?.is_test_data);
+}
+
 /** Names used on previous race days, most recent first — for suggestions. */
 export async function recentOfficerNames() {
   const days = await db.getAll("race_days");

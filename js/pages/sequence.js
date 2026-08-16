@@ -12,7 +12,8 @@ import { el, clear, panel, notice, field, armedButton, onArmChange } from "./../
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { sequenceState, countdown, marksCrossed, raceLabel } from "./../state.js";
+import { sequenceState, countdown, marksCrossed, raceLabel, scaledNow, SEQUENCE_MS } from "./../state.js";
+import { sequenceSpeed, isFastClock, onSpeedChange } from "./../devclock.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
 import { navigate } from "./../router.js";
 
@@ -24,6 +25,7 @@ let context = null;
 let lastSeconds = null;
 let handedOver = false;
 let offArm = null;
+let offSpeed = null;
 /* The live nodes the tick updates, so the panel — and its buttons — are built
    once rather than four times a second. Replacing a button mid-gesture is a
    good way to make it untappable. */
@@ -39,6 +41,7 @@ export default {
     await load();
     render();
     offArm = onArmChange(render);
+    offSpeed = onSpeedChange(render);
     // Only the digits move; see tick().
     ticker = setInterval(tick, 250);
   },
@@ -48,6 +51,8 @@ export default {
     ticker = null;
     offArm?.();
     offArm = null;
+    offSpeed?.();
+    offSpeed = null;
     live = null;
     host = null;
     context = null;
@@ -77,7 +82,10 @@ function tick() {
   const sequence = sequenceState(context.events);
   if (!sequence.running) return render();
 
-  const clock = countdown(sequence.startAt, Date.now());
+  const clock = countdown(
+    sequence.startAt,
+    scaledNow({ anchor: sequence.startedAt, now: Date.now(), speed: sequenceSpeed() })
+  );
 
   for (const mark of marksCrossed(lastSeconds, clock.remainingSeconds)) {
     navigator.vibrate?.(mark.at === 0 ? [200, 80, 200] : 120);
@@ -121,7 +129,10 @@ function render() {
 
   keepAwake();
 
-  const clock = countdown(sequence.startAt, Date.now());
+  const clock = countdown(
+    sequence.startAt,
+    scaledNow({ anchor: sequence.startedAt, now: Date.now(), speed: sequenceSpeed() })
+  );
 
   // Pulse on each mark. Comparing two readings catches marks that passed while
   // the phone was asleep, and cannot fire the same one twice.
@@ -145,6 +156,7 @@ function armPanel(race, entries, sequence) {
   if (sequence.postponed) {
     body.append(notice("Sequence postponed (AP). Start again when the fleet is ready.", "info"));
   }
+  if (isFastClock()) body.append(testClockNotice());
   body.append(
     el("div.regname", { text: `${raceLabel(race)} · ${entries.length} boats signed on` }),
     el("p.stub", {
@@ -160,7 +172,15 @@ function armPanel(race, entries, sequence) {
       // Written before anything else happens, so the tap time is the record.
       await log.startSequence(race.id);
       await rd.setRaceStatusIfEarlier(race, "sequence");
-      lastSeconds = null;
+      /* A sequence begun on the fast clock makes the whole day test data,
+         permanently. The events it produces carry real timestamps and are
+         otherwise indistinguishable from a real race. */
+      if (isFastClock()) await rd.markRaceDayAsTest(context.raceDay);
+      /* Seed just above 10:00 so the first reading CROSSES the class-flag
+         mark and pulses. A null previous stays silent, which is what opening
+         the page part-way through a running sequence should do — but tapping
+         Start is itself the 10:00 moment and deserves the confirmation. */
+      lastSeconds = SEQUENCE_MS / 1000 + 1;
       await reload();
     },
   });
@@ -215,7 +235,17 @@ function countdownPanel(race, clock, sequence) {
   ]);
 
   live = { clock: clockNode, flag: flagNode, panel: wrap };
-  return el("div", {}, [wrap, controls]);
+  const parts = [wrap, controls];
+  if (isFastClock()) parts.unshift(testClockNotice());
+  return el("div", {}, parts);
+}
+
+/** Impossible to miss: a race started now is not a real one. */
+function testClockNotice() {
+  return notice(
+    `Fast clock ${sequenceSpeed()}× — a race started now is marked TEST DATA and its results are not real.`,
+    "error"
+  );
 }
 
 /** At zero: record the gun and hand over to the live race page. */

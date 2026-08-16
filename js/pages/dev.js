@@ -12,6 +12,7 @@ import { sync, fakeBackend } from "./../sync.js";
 import * as api from "./../supabase.js";
 import { supabaseBackend, pullReferenceData, lastRefreshedAt } from "./../backend.js";
 import { promptForPin } from "./../app.js";
+import { SPEEDS, sequenceSpeed, setSequenceSpeed, isFastClock } from "./../devclock.js";
 
 let stopWatching = null;
 
@@ -29,6 +30,25 @@ export default {
       fakeBackend.failureRate = Number(failRate.value) / 100;
       failOut.textContent = `${failRate.value}%`;
     });
+
+    /* The fast clock is in-memory only: a reload is always back to 1x, so a
+       compressed sequence can never follow anyone into a real race day. */
+    const speedSelect = section.querySelector("#dev-speed");
+    const speedNote = section.querySelector("#dev-speed-note");
+    speedSelect.value = String(sequenceSpeed());
+    const describeSpeed = () => {
+      speedNote.textContent = isFastClock()
+        ? `A full 10-minute sequence takes ${Math.round(600 / sequenceSpeed())}s. Any race started at this speed is permanently marked as test data. Reload to return to 1×.`
+        : "Real time. Reloading always returns here.";
+      speedNote.className = isFastClock() ? "notice notice-error" : "stub";
+    };
+    speedSelect.addEventListener("change", () => {
+      setSequenceSpeed(speedSelect.value);
+      speedSelect.value = String(sequenceSpeed());
+      describeSpeed();
+      render();
+    });
+    describeSpeed();
 
     const backendSelect = section.querySelector("#dev-backend");
     const refreshedLine = section.querySelector("#dev-refreshed");
@@ -104,6 +124,7 @@ export default {
 
       const lines = [
         `signed in    ${api.isSignedIn() ? "yes" : "no"}`,
+        `clock        ${sequenceSpeed()}x${isFastClock() ? "  (races marked TEST DATA)" : ""}`,
         `race         ${race ? `${race.number} — ${race.status}` : "none"}`,
         `backend      ${backend}${backend === "fake" ? ` (${Math.round(fakeBackend.failureRate * 100)}% failure)` : ""}`,
         `status       ${sync.status.state}`,

@@ -124,6 +124,21 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head"><span class="panel-title">Fast clock</span></div>
+      <div class="panel-body">
+        <div class="dev-row">
+          <label for="dev-speed">Sequence speed</label>
+          <select id="dev-speed">
+            <option value="1">1× — real time</option>
+            <option value="10">10× — one minute</option>
+            <option value="60">60× — ten seconds</option>
+          </select>
+        </div>
+        <p class="stub" id="dev-speed-note" style="padding:8px 0 0"></p>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><span class="panel-title">Race state</span></div>
       <div class="panel-body">
         <div class="field">

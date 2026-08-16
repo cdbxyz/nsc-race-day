@@ -127,6 +127,11 @@ function render() {
   }
 
   const node = el("div");
+  if (rd.isTestDay(context.raceDay)) {
+    node.append(
+      notice("TEST DATA — this race was started on the dev fast clock.", "error")
+    );
+  }
   node.append(clockBar(state));
   if (state.ended) node.append(endedPanel(state));
   if (state.done.length) node.append(finishedRail(state));

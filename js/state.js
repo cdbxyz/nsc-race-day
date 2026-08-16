@@ -132,6 +132,26 @@ export function phaseFor(remainingSeconds) {
 }
 
 /**
+ * The clock as the countdown should read it, optionally compressed.
+ *
+ * This is the whole of the dev fast clock: nothing downstream knows it
+ * exists. countdown(), phaseFor() and marksCrossed() are handed a scaled
+ * `now` and behave exactly as they do in a real race — which is the point,
+ * because otherwise the sped-up sequence would be testing different code
+ * from the one that ships.
+ *
+ * The anchor is when the sequence actually started, in real time. Elapsed
+ * time since then is multiplied; the anchor itself never moves, so stored
+ * timestamps stay honest.
+ *
+ * @param {{anchor: number|null, now: number, speed?: number}} args
+ */
+export function scaledNow({ anchor, now, speed = 1 }) {
+  if (anchor == null || !Number.isFinite(speed) || speed === 1) return now;
+  return anchor + (now - anchor) * speed;
+}
+
+/**
  * Whether a mark has just been crossed, for the vibration pulse.
  * Compares two readings rather than watching a timer, so a sleeping phone
  * cannot miss one and a slow frame cannot fire one twice.

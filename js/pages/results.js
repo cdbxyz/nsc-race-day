@@ -113,6 +113,7 @@ function render() {
   }
 
   const node = el("div");
+  if (rd.isTestDay(context.raceDay)) node.append(testDataBanner());
   node.append(headerPanel());
   node.append(resultsPanel());
   if (correcting) node.append(correctionSheet());
@@ -155,6 +156,13 @@ function headerPanel() {
   }
 
   return header;
+}
+
+function testDataBanner() {
+  return notice(
+    "TEST DATA — this race was run on the dev fast clock. These results are not real and must not be published as if they were.",
+    "error"
+  );
 }
 
 /* ---- the sheet ---------------------------------------------------------- */
@@ -360,6 +368,7 @@ function exportPanel() {
     `${raceDay.date}`,
     series ? `${series.name} ${series.season}` : null,
     dutyLine(raceDay),
+    rd.isTestDay(raceDay) ? "TEST DATA — not a real race" : null,
     `Max laps ${context.results.maxLaps}`,
     `${context.results.starters} starters`,
   ]
@@ -376,7 +385,7 @@ function exportPanel() {
         onclick: (event) => {
           const { rows, muted } = exportRows();
           savePdf({
-            title: raceLabel(race),
+            title: rd.isTestDay(raceDay) ? `${raceLabel(race)} — TEST DATA` : raceLabel(race),
             subtitle: "Portsmouth Yardstick corrected time",
             meta,
             columns: COLUMNS,
@@ -427,7 +436,13 @@ function toCsv() {
   const escape = (cell) => (/[",\n]/.test(String(cell)) ? `"${String(cell).replace(/"/g, '""')}"` : String(cell));
   // A title line first: a named trophy race's sheet is the one that gets kept,
   // and a bare grid of numbers does not say which race it was.
-  const title = [`${raceLabel(race)}`, raceDay.date].join(" · ");
+  const title = [
+    `${raceLabel(race)}`,
+    raceDay.date,
+    rd.isTestDay(raceDay) ? "TEST DATA — not a real race" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return [[title], head, ...rows].map((row) => row.map(escape).join(",")).join("\n");
 }
 
@@ -491,7 +506,8 @@ async function doPublish() {
 
   /* Record the win locally as well, so the same-day handicap rule works with
      no signal — the server view cannot be consulted on the beach. */
-  const winner = results.scored[0];
+  /* A ten-second test race must never move a real helm's season handicap. */
+  const winner = rd.isTestDay(raceDay) ? null : results.scored[0];
   if (winner && !winner.tied) {
     const entry = context.entries.find((e) => e.id === winner.id);
     if (entry) {
