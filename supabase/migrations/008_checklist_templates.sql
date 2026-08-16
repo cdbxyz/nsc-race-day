@@ -1,16 +1,22 @@
 -- 008_checklist_templates.sql — first drafts of the two safety checklists.
 --
 -- These are DATA, not code. The sailing committee is expected to rewrite the
--- wording, reorder items and add their own; that can be done in the dashboard
--- without touching the app or asking anyone to reinstall anything. The ids are
--- fixed so an edit updates these rows rather than creating a second set.
+-- wording, reorder items and add their own, in the dashboard, without touching
+-- the app or asking anyone to reinstall anything.
+--
+-- INSERT ONLY. This seeds a template the first time and never touches it
+-- again: after first deploy the dashboard is the source of truth, and a
+-- re-run of this migration must not silently discard whatever the committee
+-- has since written. It previously replaced the whole `items` array on
+-- conflict, which would have done exactly that.
 --
 -- Item ids must stay stable once a checklist has been run: checklist_runs
 -- stores responses keyed by item id, and renaming an id orphans the history.
 
-insert into checklist_templates (id, kind, items) values
+insert into checklist_templates (id, kind, items)
+select id, kind, items from (values
 (
-  'aaaa1111-0000-4000-8000-000000000001',
+  'aaaa1111-0000-4000-8000-000000000001'::uuid,
   'pre_race',
   '[
     {"id": "rescue_fuel",    "label": "Rescue boat fuelled and running"},
@@ -26,7 +32,7 @@ insert into checklist_templates (id, kind, items) values
   ]'::jsonb
 ),
 (
-  'aaaa1111-0000-4000-8000-000000000002',
+  'aaaa1111-0000-4000-8000-000000000002'::uuid,
   'stand_down',
   '[
     {"id": "all_ashore",     "label": "Every boat accounted for and ashore"},
@@ -38,7 +44,8 @@ insert into checklist_templates (id, kind, items) values
     {"id": "clubhouse",      "label": "Clubhouse secured"},
     {"id": "incidents",      "label": "Incidents, near misses or damage noted below"}
   ]'::jsonb
+) as seed (id, kind, items)
+where not exists (
+  select 1 from checklist_templates existing where existing.kind = seed.kind
 )
-on conflict (id) do update
-  set kind = excluded.kind,
-      items = excluded.items;
+on conflict (id) do nothing;

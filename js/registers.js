@@ -15,7 +15,7 @@ export async function listClasses() {
   return classes.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function createClass({ name, basePy }) {
+export async function createClass({ name, basePy, crewSize = 1 }) {
   const trimmed = String(name ?? "").trim();
   if (!trimmed) throw new Error("A class needs a name.");
   const py = Number(basePy);
@@ -30,19 +30,21 @@ export async function createClass({ name, basePy }) {
     id: db.newId(),
     name: trimmed,
     base_py: Math.round(py),
+    crew_size: Number(crewSize) === 2 ? 2 : 1,
     created_at: db.nowIso(),
   };
   await db.localWrite("classes", row);
   return row;
 }
 
-export async function updateClass(id, { name, basePy }) {
+export async function updateClass(id, { name, basePy, crewSize }) {
   const current = await db.get("classes", id);
   if (!current) throw new Error("That class is not in the register.");
   const row = {
     ...current,
     name: String(name ?? current.name).trim(),
     base_py: Math.round(Number(basePy ?? current.base_py)),
+    crew_size: crewSize == null ? (current.crew_size ?? 1) : Number(crewSize) === 2 ? 2 : 1,
   };
   await db.localWrite("classes", row);
   return row;
@@ -123,6 +125,7 @@ export async function seedClassesFromCsv(text) {
       id: db.newId(),
       name: row.name,
       base_py: row.base_py,
+      crew_size: 1,
       created_at: db.nowIso(),
     };
     await db.localWrite("classes", created_row);
@@ -144,12 +147,17 @@ export async function listBoats() {
 
 export async function createBoat({ name, sailNo, classId }) {
   const trimmed = String(name ?? "").trim();
-  if (!trimmed) throw new Error("A boat needs a name or sail number.");
+  const sail = String(sailNo ?? "").trim();
+  if (!trimmed && !sail) throw new Error("A hull needs a name or a sail number.");
   if (!classId) throw new Error("A boat needs a class — that is where its PY comes from.");
+  if (/\+/.test(trimmed)) {
+    // The workaround this redesign exists to remove.
+    throw new Error("Boats are hulls, not pairings. Record the crew on the entry instead.");
+  }
 
   const row = {
     id: db.newId(),
-    name: trimmed,
+    name: trimmed || null,
     sail_no: String(sailNo ?? "").trim() || null,
     class_id: classId,
     active: true,
@@ -179,7 +187,13 @@ export async function retireBoat(id) {
   await db.localWrite("boats", { ...current, active: false });
 }
 
-/* ---- helms -------------------------------------------------------------- */
+/* ---- people --------------------------------------------------------------
+ * One register for everybody. A person helms one week and crews the next, so
+ * there is deliberately no second list — `helms` is the members register.
+ * ----------------------------------------------------------------------- */
+
+export const listMembers = () => listHelms();
+export const createMember = (args) => createHelm(args);
 
 export async function listHelms() {
   const helms = await db.getAll("helms");

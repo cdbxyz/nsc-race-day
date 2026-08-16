@@ -36,3 +36,20 @@ test("the worker does not skip waiting on install", async () => {
   assert.ok(installBlock.length > 0, "could not find the install handler");
   assert.ok(!installBlock.includes("skipWaiting"), "install must not skip the waiting phase");
 });
+
+/* ---------------------------------------------------------------------------
+ * Seed migrations for committee-editable data are insert-only.
+ *
+ * 008 used to replace the whole `items` array on conflict, so a re-run would
+ * have silently discarded whatever wording the committee had written in the
+ * dashboard. After first deploy the dashboard is the source of truth.
+ * ------------------------------------------------------------------------ */
+
+test("the checklist seed can never overwrite an edited template", async () => {
+  const sql = await readFile(new URL("../supabase/migrations/008_checklist_templates.sql", import.meta.url), "utf8");
+  const code = sql.replace(/^--.*$/gm, "");
+
+  assert.ok(!/do\s+update/i.test(code), "a seed must not replace an existing row");
+  assert.match(code, /on conflict \(id\) do nothing/i);
+  assert.match(code, /where not exists/i, "and must skip a kind that already exists");
+});

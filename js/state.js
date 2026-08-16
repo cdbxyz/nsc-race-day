@@ -167,6 +167,45 @@ export function raceName(race) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Identifying an entry
+ *
+ * Most boats at this club have no name. What persists is the combination: a
+ * helm, sometimes a crew, in a class. So an entry is labelled by whoever is
+ * sailing it, unless there is a real named hull — in which case the hull
+ * leads, because that is what people will call it.
+ * ------------------------------------------------------------------------ */
+
+/** "Vaila", or "Hamish Fowler + Lisa Brown", or "Hamish Fowler". */
+export function entryLabel({ boat = null, helm = null, crew = null } = {}) {
+  const hull = String(boat?.name ?? "").trim();
+  if (hull) return hull;
+  const people = [helm?.name, crew?.name].map((n) => String(n ?? "").trim()).filter(Boolean);
+  return people.join(" + ") || "unknown";
+}
+
+/**
+ * The second line: who is sailing (when the hull led), the class, and the
+ * sail number if there is one. Never repeats what entryLabel already said.
+ */
+export function entryDetail({ boat = null, helm = null, crew = null, klass = null } = {}) {
+  const hull = String(boat?.name ?? "").trim();
+  const people = [helm?.name, crew?.name].map((n) => String(n ?? "").trim()).filter(Boolean);
+  const sailNo = String(boat?.sail_no ?? "").trim();
+  return [
+    hull ? people.join(" + ") : null, // only if the hull took the first line
+    klass?.name ?? null,
+    sailNo || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Everyone aboard, for the stand-down tally. */
+export function entryPeople({ helm = null, crew = null } = {}) {
+  return [helm, crew].filter(Boolean);
+}
+
+/* ---------------------------------------------------------------------------
  * The lap plan
  * ------------------------------------------------------------------------ */
 

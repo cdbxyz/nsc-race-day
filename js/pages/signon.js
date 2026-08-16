@@ -13,7 +13,7 @@ import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as reg from "./../registers.js";
 import { factorFor } from "./../handicap.js";
-import { raceLabel } from "./../state.js";
+import { raceLabel, entryLabel, entryDetail } from "./../state.js";
 import { dutyLine } from "./setup.js";
 import { navigate } from "./../router.js";
 
@@ -21,8 +21,6 @@ let host = null;
 let offArm = null;
 let search = "";
 let showAddBoat = false;
-/* A boat tapped that has never raced here, so nobody knows who is helming it. */
-let awaitingHelmFor = null;
 
 export default {
   title: "Sign-on",
@@ -39,7 +37,6 @@ export default {
     host = null;
     search = "";
     showAddBoat = false;
-    awaitingHelmFor = null;
   },
 };
 
@@ -55,13 +52,12 @@ async function load() {
   const season = rd.seasonForRace({ ...race, race_date: raceDay.date }, series);
   const context = await rd.handicapContext(season);
 
-  const [entries, boats, helms, classes, lastHelms, recentUse] = await Promise.all([
+  const [entries, boats, members, classes, combinations] = await Promise.all([
     rd.entriesForRace(race.id),
     reg.listBoats(),
-    reg.listHelms(),
+    reg.listMembers(),
     reg.listClasses(),
-    rd.lastKnownHelms(),
-    rd.boatsByRecentUse(),
+    rd.recentCombinations(),
   ]);
 
   return {
@@ -72,12 +68,12 @@ async function load() {
     context,
     entries,
     boats,
-    helms,
+    members,
+    helms: members,
     classes,
-    lastHelms,
-    recentUse,
+    combinations,
     boatById: new Map(boats.map((b) => [b.id, b])),
-    helmById: new Map(helms.map((h) => [h.id, h])),
+    helmById: new Map(members.map((h) => [h.id, h])),
     classById: new Map(classes.map((c) => [c.id, c])),
   };
 }
@@ -103,19 +99,12 @@ async function render() {
   const node = el("div");
   node.append(headerPanel(data));
 
-  if (awaitingHelmFor) {
-    const chooser = helmChooser(data);
-    if (chooser) node.append(chooser);
-  }
-
   const carry = await carryForwardPanel(data);
   if (carry) node.append(carry);
   node.append(searchPanel(data));
   node.append(entriesPanel(data));
   clear(host).append(node);
 
-  // Put the cursor where the next tap would have gone.
-  if (awaitingHelmFor) node.querySelector(".subform input")?.focus();
 }
 
 function headerPanel(data) {
@@ -140,26 +129,30 @@ async function carryForwardPanel(data) {
   const candidates = await rd.carryForwardCandidates(data.race, data.context);
   if (!candidates.length) return null;
 
-  const chosen = new Set(candidates.map((c) => c.boat.id));
+  const chosen = new Set(candidates.map((c) => c.helmId));
   const list = el("div.reglist");
 
   for (const candidate of candidates) {
     const helm = data.helmById.get(candidate.helmId);
+    const crew = candidate.crewId ? data.helmById.get(candidate.crewId) : null;
+    const parts = { boat: candidate.boat, helm, crew, klass: candidate.klass };
     const toggle = el("input", {
       type: "checkbox",
       checked: true,
       onchange: (event) => {
-        if (event.target.checked) chosen.add(candidate.boat.id);
-        else chosen.delete(candidate.boat.id);
+        if (event.target.checked) chosen.add(candidate.helmId);
+        else chosen.delete(candidate.helmId);
       },
     });
     list.append(
       el("label.regrow.pickable", {}, [
         toggle,
         el("div.regmain", {}, [
-          el("div.regname", { text: candidate.boat.name }),
+          el("div.regname", { text: entryLabel(parts) }),
           el("div.regmeta", {
-            text: `${helm?.name ?? "no helm"} · ${describeFactor(candidate.snapshot, candidate.wins)}`,
+            text: [entryDetail(parts), describeFactor(candidate.snapshot, candidate.wins)]
+              .filter(Boolean)
+              .join(" · "),
           }),
         ]),
       ])
@@ -172,17 +165,18 @@ async function carryForwardPanel(data) {
     onclick: async () => {
       bring.disabled = true;
       for (const candidate of candidates) {
-        if (!chosen.has(candidate.boat.id)) continue;
+        if (!chosen.has(candidate.helmId)) continue;
         try {
           await rd.addEntry({
             race: data.race,
-            boat: candidate.boat,
             klass: candidate.klass,
             helmId: candidate.helmId,
+            crewId: candidate.crewId,
+            boat: candidate.boat,
             context: data.context,
           });
         } catch (err) {
-          console.warn("carry forward skipped", candidate.boat.name, err.message);
+          console.warn("carry forward skipped", err.message);
         }
       }
       await render();
@@ -206,14 +200,20 @@ async function carryForwardPanel(data) {
 
 /* ---- search and add ----------------------------------------------------- */
 
+/* ---- combinations ------------------------------------------------------ */
+
+/**
+ * Sign-on is combination-first: the club races pairings, not hulls. Recent
+ * combinations are one tap; anything new goes through the manual path below.
+ */
 function searchPanel(data) {
   const body = el("div.panel-body");
 
   const box = el("input.searchbox", {
     type: "search",
     value: search,
-    placeholder: "Search boats…",
-    "aria-label": "Search boats",
+    placeholder: "Search helm, crew or class…",
+    "aria-label": "Search combinations",
     autocomplete: "off",
     oninput: (event) => {
       search = event.target.value;
@@ -223,56 +223,56 @@ function searchPanel(data) {
   const matches = el("div.reglist");
   body.append(box, matches);
 
-  const signedOn = new Set(data.entries.map((e) => e.boat_id));
+  const signedOnHelms = new Set(data.entries.map((e) => e.helm_id));
 
   function renderMatches() {
     clear(matches);
     const needle = search.trim().toLowerCase();
-    const available = data.boats.filter((b) => !signedOn.has(b.id));
 
-    const scored = available
-      .filter((boat) => {
-        if (!needle) return true;
-        return (
-          boat.name.toLowerCase().includes(needle) ||
-          String(boat.sail_no ?? "").toLowerCase().includes(needle) ||
-          String(boat.klass?.name ?? "").toLowerCase().includes(needle)
-        );
+    const rows = data.combinations
+      .map((combo) => {
+        const helm = data.helmById.get(combo.helmId) ?? null;
+        const crew = combo.crewId ? data.helmById.get(combo.crewId) ?? null : null;
+        const klass = data.classById.get(combo.classId) ?? null;
+        const boat = combo.boatId ? data.boatById.get(combo.boatId) ?? null : null;
+        return { combo, helm, crew, klass, boat };
       })
-      // Most recently raced first: the boats out today are the likely ones.
-      .sort((a, b) => {
-        const seenA = data.recentUse.get(a.id) ?? "";
-        const seenB = data.recentUse.get(b.id) ?? "";
-        if (seenA !== seenB) return seenB.localeCompare(seenA);
-        return a.name.localeCompare(b.name);
+      .filter((row) => row.helm && row.klass)
+      .filter((row) => !signedOnHelms.has(row.combo.helmId))
+      .filter((row) => {
+        if (!needle) return true;
+        // Helm OR crew OR class, because any of the three is how someone
+        // would think to look for a combination.
+        return [row.helm?.name, row.crew?.name, row.klass?.name, row.boat?.name]
+          .filter(Boolean)
+          .some((text) => text.toLowerCase().includes(needle));
       })
       .slice(0, 12);
 
-    if (!scored.length) {
+    if (!rows.length) {
       matches.append(
         el("div.empty", {}, [
-          el("p", { text: needle ? `No boat matching “${search}”.` : "Every boat is signed on." }),
+          el("p", {
+            text: needle
+              ? `Nothing matching “${search}”. Use “New combination” below.`
+              : data.combinations.length
+                ? "Everyone who has raced before is signed on."
+                : "No combinations yet — use “New combination” below.",
+          }),
         ])
       );
       return;
     }
 
-    for (const boat of scored) {
-      const helmId = data.lastHelms.get(boat.id) ?? null;
-      const helm = helmId ? data.helmById.get(helmId) : null;
-      const klass = data.classById.get(boat.class_id) ?? null;
+    for (const row of rows) {
       matches.append(
         el("button.regrow.tappable", {
           type: "button",
-          onclick: () => addBoat(data, boat, klass, helmId, body),
+          onclick: () => signOnCombination(data, row, body),
         }, [
           el("div.regmain", {}, [
-            el("div.regname", { text: boat.name }),
-            el("div.regmeta", {
-              text: [klass ? `${klass.name} · ${klass.base_py}` : "no class", helm?.name]
-                .filter(Boolean)
-                .join(" · "),
-            }),
+            el("div.regname", { text: entryLabel(row) }),
+            el("div.regmeta", { text: entryDetail(row) || row.klass.name }),
           ]),
           el("span.addmark", { text: "+", "aria-hidden": "true" }),
         ])
@@ -284,7 +284,7 @@ function searchPanel(data) {
 
   const addNew = el("button.btn.ghost", {
     type: "button",
-    text: showAddBoat ? "Cancel" : "New boat",
+    text: showAddBoat ? "Cancel" : "New combination",
     onclick: () => {
       showAddBoat = !showAddBoat;
       render();
@@ -292,41 +292,84 @@ function searchPanel(data) {
   });
 
   const children = [body, el("div.actions", {}, [addNew])];
-  if (showAddBoat) children.splice(1, 0, newBoatForm(data));
+  if (showAddBoat) children.splice(1, 0, newCombinationForm(data));
 
   return panel("Add a boat", children, { count: `${data.entries.length} signed on` });
 }
 
+async function signOnCombination(data, row, container) {
+  container.querySelectorAll(".notice").forEach((n) => n.remove());
+  try {
+    await rd.addEntry({
+      race: data.race,
+      klass: row.klass,
+      helmId: row.combo.helmId,
+      crewId: row.combo.crewId,
+      boat: row.boat,
+      context: data.context,
+    });
+    search = "";
+    await render();
+  } catch (err) {
+    container.prepend(notice(err.message, "error"));
+  }
+}
+
 /**
- * A boat that is not in the register yet. Kept on this page rather than
- * sending the OOD to the registers screen mid sign-on.
+ * A combination nobody has sailed here before: pick the class, name the helm,
+ * and name the crew if the class carries one. Everyone comes from the same
+ * members register — a person helms one week and crews the next.
  */
-function newBoatForm(data) {
+function newCombinationForm(data) {
   const body = el("div.panel-body.subform");
 
-  const name = field("Boat name or sail number", { class: "text", autocomplete: "off" });
   const klass = selectField("Class", [
-    ...data.classes.map((c) => ({ value: c.id, label: `${c.name} · ${c.base_py}` })),
+    ...data.classes.map((c) => ({
+      value: c.id,
+      label: `${c.name} · ${c.base_py}${(c.crew_size ?? 1) === 2 ? " · 2 up" : ""}`,
+    })),
     { value: "__new__", label: "+ New class…" },
   ]);
   const newClassName = field("Class name", { class: "text", autocomplete: "off" });
   const newClassPy = field("Base PY", { inputMode: "numeric", autocomplete: "off" });
-  const newClassBlock = el("div.subform", { hidden: true }, [newClassName.node, newClassPy.node]);
-  klass.select.addEventListener("change", () => {
-    newClassBlock.hidden = klass.select.value !== "__new__";
-  });
-  if (!data.classes.length) {
-    klass.select.value = "__new__";
-    newClassBlock.hidden = false;
-  }
+  const newClassCrew = selectField("Crew", [
+    { value: "1", label: "Single-handed" },
+    { value: "2", label: "Double-handed" },
+  ]);
+  const newClassBlock = el("div.subform", { hidden: true }, [
+    newClassName.node, newClassPy.node, newClassCrew.node,
+  ]);
 
-  const helmName = field("Helm", { class: "text", list: "helm-names", autocomplete: "off" });
-  const helmOptions = el("datalist", { id: "helm-names" },
-    data.helms.map((h) => el("option", { value: h.name })));
+  const memberOptions = el("datalist", { id: "member-names" },
+    data.members.map((m) => el("option", { value: m.name })));
+
+  const helmName = field("Helm", { class: "text", list: "member-names", autocomplete: "off" });
+  const crewName = field("Crew (optional)", {
+    class: "text", list: "member-names", autocomplete: "off",
+    placeholder: "Leave blank if sailing solo",
+  });
+  const crewBlock = el("div", { hidden: true }, [crewName.node]);
+
+  const sailNo = field("Sail number (optional)", { class: "text", autocomplete: "off" });
+
+  /* The crew field appears only for a double-hander — but stays optional,
+     because sailing a two-man boat single-handed is perfectly normal. */
+  function syncCrewVisibility() {
+    const chosen = data.classById.get(klass.select.value);
+    const crewSize = klass.select.value === "__new__"
+      ? Number(newClassCrew.select.value)
+      : Number(chosen?.crew_size ?? 1);
+    crewBlock.hidden = crewSize !== 2;
+    newClassBlock.hidden = klass.select.value !== "__new__";
+  }
+  klass.select.addEventListener("change", syncCrewVisibility);
+  newClassCrew.select.addEventListener("change", syncCrewVisibility);
+  if (!data.classes.length) klass.select.value = "__new__";
+  syncCrewVisibility();
 
   const create = el("button.btn", {
     type: "button",
-    text: "Add and sign on",
+    text: "Sign on",
     onclick: async () => {
       body.querySelectorAll(".notice").forEach((n) => n.remove());
       create.disabled = true;
@@ -336,17 +379,26 @@ function newBoatForm(data) {
           const created = await reg.createClass({
             name: newClassName.input.value,
             basePy: newClassPy.input.value,
+            crewSize: newClassCrew.select.value,
           });
           classId = created.id;
         }
-        const boat = await reg.createBoat({ name: name.input.value, classId });
-        const helm = await reg.createHelm({ name: helmName.input.value });
         const klassRow = await db.get("classes", classId);
+        const helm = await reg.createMember({ name: helmName.input.value });
+        const crewText = crewBlock.hidden ? "" : crewName.input.value.trim();
+        const crew = crewText ? await reg.createMember({ name: crewText }) : null;
+
+        // A hull is only recorded when there is one worth recording.
+        let boat = null;
+        const sail = sailNo.input.value.trim();
+        if (sail) boat = await reg.createBoat({ name: "", sailNo: sail, classId });
+
         await rd.addEntry({
           race: data.race,
-          boat,
           klass: klassRow,
           helmId: helm.id,
+          crewId: crew?.id ?? null,
+          boat,
           context: data.context,
         });
         showAddBoat = false;
@@ -358,88 +410,12 @@ function newBoatForm(data) {
     },
   });
 
-  body.append(name.node, klass.node, newClassBlock, helmName.node, helmOptions,
-    el("div.actions", {}, [create]));
-  return body;
-}
-
-async function addBoat(data, boat, klass, helmId, container) {
-  container.querySelectorAll(".notice").forEach((n) => n.remove());
-
-  if (!helmId) {
-    // This boat has no history here, so we do not know who is sailing it.
-    // Ask inline rather than with a native prompt: a blocking browser dialog
-    // is a poor thing to hand someone with wet hands on a phone.
-    awaitingHelmFor = { boatId: boat.id, klassId: klass?.id ?? null };
-    await render();
-    return;
-  }
-
-  try {
-    await rd.addEntry({ race: data.race, boat, klass, helmId, context: data.context });
-    search = "";
-    await render();
-  } catch (err) {
-    container.prepend(notice(err.message, "error"));
-  }
-}
-
-/** Who is helming this one? Shown when a boat has no last-known helm. */
-function helmChooser(data) {
-  const boat = data.boatById.get(awaitingHelmFor.boatId);
-  const klass = data.classById.get(awaitingHelmFor.klassId) ?? null;
-  if (!boat) {
-    awaitingHelmFor = null;
-    return null;
-  }
-
-  const body = el("div.panel-body.subform");
-  const name = field(`Who is helming ${boat.name}?`, {
-    class: "text",
-    list: "helm-names-inline",
-    autocomplete: "off",
-    enterkeyhint: "done",
-  });
-  const options = el("datalist", { id: "helm-names-inline" },
-    data.helms.map((h) => el("option", { value: h.name })));
-
-  const confirmSignOn = async () => {
-    body.querySelectorAll(".notice").forEach((n) => n.remove());
-    try {
-      const helm = await reg.createHelm({ name: name.input.value });
-      await rd.addEntry({ race: data.race, boat, klass, helmId: helm.id, context: data.context });
-      awaitingHelmFor = null;
-      search = "";
-      await render();
-    } catch (err) {
-      body.prepend(notice(err.message, "error"));
-    }
-  };
-
-  name.input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      confirmSignOn();
-    }
-  });
-
   body.append(
-    name.node,
-    options,
-    el("div.actions", {}, [
-      el("button.btn", { type: "button", text: "Sign on", onclick: confirmSignOn }),
-      el("button.btn.ghost", {
-        type: "button",
-        text: "Cancel",
-        onclick: () => {
-          awaitingHelmFor = null;
-          render();
-        },
-      }),
-    ])
+    klass.node, newClassBlock, memberOptions,
+    helmName.node, crewBlock, sailNo.node,
+    el("div.actions", {}, [create])
   );
-
-  return panel(`New to the sign-on list`, [body]);
+  return body;
 }
 
 /* ---- the sign-on list --------------------------------------------------- */
@@ -454,11 +430,16 @@ function describeFactor(snapshot, wins) {
 function entriesPanel(data) {
   const list = el("div.entrylist");
 
-  const sorted = [...data.entries].sort((a, b) => {
-    const nameA = data.boatById.get(a.boat_id)?.name ?? "";
-    const nameB = data.boatById.get(b.boat_id)?.name ?? "";
-    return nameA.localeCompare(nameB);
+  const partsFor = (entry) => ({
+    boat: entry.boat_id ? data.boatById.get(entry.boat_id) ?? null : null,
+    helm: data.helmById.get(entry.helm_id) ?? null,
+    crew: entry.crew_id ? data.helmById.get(entry.crew_id) ?? null : null,
+    klass: data.classById.get(entry.class_id) ?? null,
   });
+
+  const sorted = [...data.entries].sort((a, b) =>
+    entryLabel(partsFor(a)).localeCompare(entryLabel(partsFor(b)))
+  );
 
   for (const entry of sorted) {
     list.append(entryCard(data, entry));
@@ -483,16 +464,19 @@ function entriesPanel(data) {
 }
 
 function entryCard(data, entry) {
-  const boat = data.boatById.get(entry.boat_id);
-  const helm = data.helmById.get(entry.helm_id);
-  const klass = boat ? data.classById.get(boat.class_id) : null;
+  const parts = {
+    boat: entry.boat_id ? data.boatById.get(entry.boat_id) ?? null : null,
+    helm: data.helmById.get(entry.helm_id) ?? null,
+    crew: entry.crew_id ? data.helmById.get(entry.crew_id) ?? null : null,
+    klass: data.classById.get(entry.class_id) ?? null,
+  };
   const laps = rd.entryLaps(entry, data.race);
   const wins = rd.winsFor(entry.helm_id, data.context);
 
-  /* "Hamish · Laser 2000 · 1122 × 0.97 = 1088 (1 win) · Fast, 3 laps" */
+  /* "Laser 2000 · 1122 × 0.97 = 1088 (1 win) · Fast, 3 laps" — the people are
+     already on the first line, so the summary does not repeat them. */
   const summary = [
-    helm?.name ?? "no helm",
-    klass?.name ?? "no class",
+    entryDetail(parts) || parts.klass?.name || "no class",
     describeFactor(entry, wins),
     `${entry.fleet === "fast" ? "Fast" : "Slow"}, ${laps} lap${laps === 1 ? "" : "s"}`,
   ].join(" · ");
@@ -501,7 +485,7 @@ function entryCard(data, entry) {
 
   const card = el("div.entrycard", {}, [
     el("div.entrymain", {}, [
-      el("div.entryboat", { text: boat?.name ?? "unknown boat" }),
+      el("div.entryboat", { text: entryLabel(parts) }),
       el("div.entrysummary", { text: summary }),
     ]),
     el("button.kill.entrymore", {
@@ -512,7 +496,7 @@ function entryCard(data, entry) {
         detail.hidden = !detail.hidden;
         event.currentTarget.setAttribute("aria-expanded", String(!detail.hidden));
         if (!detail.hidden && !detail.childElementCount) {
-          detail.append(entryEditor(data, entry, wins));
+          detail.append(entryEditor(data, entry, wins, parts));
         }
       },
     }),
@@ -522,12 +506,12 @@ function entryCard(data, entry) {
   return card;
 }
 
-function entryEditor(data, entry, wins) {
+function entryEditor(data, entry, wins, parts) {
   const wrap = el("div.editorgrid");
 
   const helmPick = selectField(
     "Helm",
-    data.helms.map((h) => ({ value: h.id, label: h.name })),
+    data.members.map((h) => ({ value: h.id, label: h.name })),
     { value: entry.helm_id }
   );
   helmPick.select.value = entry.helm_id;
@@ -569,16 +553,36 @@ function entryEditor(data, entry, wins) {
     await render();
   });
 
+  /* Crew only for a double-hander, and always optional: a two-man boat
+     sailed solo is normal, and the handicap does not care either way. */
+  if ((parts.klass?.crew_size ?? 1) === 2) {
+    const crewPick = selectField(
+      "Crew",
+      [
+        { value: "", label: "— sailing solo —" },
+        ...data.members
+          .filter((m) => m.id !== entry.helm_id)
+          .map((m) => ({ value: m.id, label: m.name })),
+      ],
+      { value: entry.crew_id ?? "" }
+    );
+    crewPick.select.value = entry.crew_id ?? "";
+    crewPick.select.addEventListener("change", async () => {
+      await rd.setEntryCrew(entry.id, crewPick.select.value || null);
+      await render();
+    });
+    wrap.append(crewPick.node);
+  }
+
   wrap.append(helmPick.node, factorPick.node, lapsBox.node);
 
   /* Removal disappears once the race exists on the water: from then on the
      sign-on list is the tally record, and a boat that was there must stay
      visible. Codes are how a boat stops racing after that. */
   if (rd.canRemoveEntries(data.race)) {
-    const boat = data.boatById.get(entry.boat_id);
     const remove = armedButton(`signon.remove.${entry.id}`, {
       label: "Remove from sign-on",
-      armedLabel: `Tap again to remove ${boat?.name ?? "this boat"}`,
+      armedLabel: `Tap again to remove ${entryLabel(parts)}`,
       classes: "danger",
       onConfirm: async () => {
         await rd.removeEntry(entry.id, data.race);

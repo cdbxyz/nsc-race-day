@@ -251,6 +251,42 @@ export async function entriesForRace(raceId) {
   return entries;
 }
 
+/**
+ * The combinations this club actually races: helm (+ crew) in a class, most
+ * recently first. Derived from entry history rather than stored, so it is
+ * always the truth about who has been sailing what.
+ *
+ * Identity is helm + crew + class: swapping crew makes a different
+ * combination, because that is how the club thinks about it.
+ *
+ * @returns {Array<{key, helmId, crewId, classId, boatId, lastSeen}>}
+ */
+export async function recentCombinations() {
+  const [entries, races] = await Promise.all([db.getAll("entries"), db.getAll("races")]);
+  const raceById = new Map(races.map((r) => [r.id, r]));
+
+  const byKey = new Map();
+  for (const entry of entries) {
+    if (!entry.class_id) continue;
+    const race = raceById.get(entry.race_id);
+    const when = String(race?.start_at ?? race?.sequence_start_at ?? "");
+    const key = `${entry.helm_id}|${entry.crew_id ?? ""}|${entry.class_id}`;
+    const existing = byKey.get(key);
+    if (!existing || when > existing.lastSeen) {
+      byKey.set(key, {
+        key,
+        helmId: entry.helm_id,
+        crewId: entry.crew_id ?? null,
+        classId: entry.class_id,
+        boatId: entry.boat_id ?? null,
+        lastSeen: when,
+      });
+    }
+  }
+
+  return [...byKey.values()].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+}
+
 /** Boats that have raced, most recently first — the sign-on search order. */
 export async function boatsByRecentUse() {
   const [entries, races] = await Promise.all([db.getAll("entries"), db.getAll("races")]);
@@ -287,15 +323,37 @@ export async function lastKnownHelms() {
  * Sign a boat on. The PY, factor and fleet are snapshotted here and never
  * recomputed, so a published result never shifts under a later win.
  */
-export async function addEntry({ race, boat, klass, helmId, context, factorOverride = null }) {
+/**
+ * Sign a combination on.
+ *
+ * The class is what matters — that is where the PY comes from. A hull is
+ * optional, because most boats here are identified by who is sailing them.
+ * Crew is optional even in a double-hander: sailing one short is normal.
+ *
+ * The PY, factor and fleet are snapshotted here and never recomputed, so a
+ * published result never shifts under a later win.
+ */
+export async function addEntry({
+  race,
+  klass,
+  helmId,
+  crewId = null,
+  boat = null,
+  context,
+  factorOverride = null,
+}) {
   if (!race) throw new Error("No race to sign on to.");
-  if (!boat) throw new Error("No boat.");
   if (!helmId) throw new Error("Every entry needs a helm.");
-  if (!klass) throw new Error(`${boat.name} has no class, so no PY to race off.`);
+  if (!klass) throw new Error("Pick a class — that is where the PY comes from.");
+  if (crewId && crewId === helmId) throw new Error("The helm cannot also be the crew.");
 
   const existing = await entriesForRace(race.id);
-  if (existing.some((e) => e.boat_id === boat.id)) {
-    throw new Error(`${boat.name} is already signed on.`);
+  // A helm sails one boat per race; that is the real duplicate rule now.
+  if (existing.some((e) => e.helm_id === helmId)) {
+    throw new Error("That helm is already signed on for this race.");
+  }
+  if (boat && existing.some((e) => e.boat_id === boat.id)) {
+    throw new Error(`${boat.name ?? "That hull"} is already signed on.`);
   }
 
   const wins = winsFor(helmId, context);
@@ -304,8 +362,12 @@ export async function addEntry({ race, boat, klass, helmId, context, factorOverr
   const row = {
     id: db.newId(),
     race_id: race.id,
-    boat_id: boat.id,
+    class_id: klass.id,
+    boat_id: boat?.id ?? null,
     helm_id: helmId,
+    // Crew is recorded for the tally and the result sheet; it has no bearing
+    // on the handicap, which follows the helm alone.
+    crew_id: crewId || null,
     base_py: snap.base_py,
     handicap_factor: snap.handicap_factor,
     personal_py: snap.personal_py,
@@ -316,10 +378,27 @@ export async function addEntry({ race, boat, klass, helmId, context, factorOverr
   return row;
 }
 
+/** Change or clear an entry's crew. Never touches the handicap. */
+export async function setEntryCrew(entryId, crewId) {
+  const entry = await db.get("entries", entryId);
+  if (!entry) throw new Error("That entry has gone.");
+  if (crewId && crewId === entry.helm_id) throw new Error("The helm cannot also be the crew.");
+  const row = { ...entry, crew_id: crewId || null };
+  await db.localWrite("entries", row);
+  return row;
+}
+
 /** Change an entry's helm, recomputing the snapshot for the new person. */
 export async function setEntryHelm(entryId, helmId, context) {
   const entry = await db.get("entries", entryId);
   if (!entry) throw new Error("That entry has gone.");
+  if (entry.crew_id && entry.crew_id === helmId) {
+    throw new Error("That person is already the crew on this entry.");
+  }
+  const others = (await entriesForRace(entry.race_id)).filter((e) => e.id !== entryId);
+  if (others.some((e) => e.helm_id === helmId)) {
+    throw new Error("That helm is already signed on for this race.");
+  }
   const wins = winsFor(helmId, context);
   const snap = entrySnapshot({ basePy: entry.base_py, wins });
   const row = {
@@ -413,29 +492,31 @@ export async function carryForwardCandidates(race, context) {
     entriesForRace(previous.id),
     entriesForRace(race.id),
   ]);
-  const signedOn = new Set(alreadyHere.map((e) => e.boat_id));
 
   const [boats, classes] = await Promise.all([db.getAll("boats"), db.getAll("classes")]);
   const boatById = new Map(boats.map((b) => [b.id, b]));
   const classById = new Map(classes.map((c) => [c.id, c]));
 
+  const signedOnHelms = new Set(alreadyHere.map((e) => e.helm_id));
+
   return previousEntries
-    .filter((entry) => !signedOn.has(entry.boat_id))
+    .filter((entry) => !signedOnHelms.has(entry.helm_id))
     .map((entry) => {
-      const boat = boatById.get(entry.boat_id) ?? null;
-      const klass = boat ? classById.get(boat.class_id) ?? null : null;
+      const boat = entry.boat_id ? boatById.get(entry.boat_id) ?? null : null;
+      const klass = classById.get(entry.class_id) ?? null;
       const wins = winsFor(entry.helm_id, context);
       const basePy = klass?.base_py ?? entry.base_py;
       return {
         boat,
         klass,
         helmId: entry.helm_id,
+        crewId: entry.crew_id ?? null,
         previousEntry: entry,
         wins,
         snapshot: entrySnapshot({ basePy, wins }),
       };
     })
-    .filter((candidate) => candidate.boat);
+    .filter((candidate) => candidate.klass);
 }
 
 export function seasonForRace(race, series) {

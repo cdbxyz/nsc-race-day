@@ -17,6 +17,17 @@ Hard rules:
   "Rescue Officer 1 (RO1)" where there is room and "RO1" where compact
   (headers, PDF, CSV). The `ro1_name` / `ro2_name` columns and `ro1Name` /
   `ro2Name` identifiers are already correct and are not to be renamed.
+- **Seed migrations for committee-editable data are INSERT ONLY.** Checklist
+  templates and the like are seeded once; after first deploy the dashboard is
+  the source of truth and a re-run must never replace an existing row. A
+  seed that overwrites silently discards the committee's own wording.
+- **Boats are hulls, never crew pairings.** The identity that persists at
+  this club is the combination — helm (+ crew) in a class — not the boat.
+  An entry carries `class_id` (where the PY comes from), `helm_id`,
+  optional `crew_id`, and `boat_id` only when a real named hull exists.
+  `helms` is the members register for everyone: a person helms one week and
+  crews the next; there is no second people table. Handicap wins and factors
+  attach to the HELM alone, whoever is crewing.
 - The club is **Nefyn Sailing Club (never Netley)**. NSC expands to Nefyn
   Sailing Club everywhere it appears — UI copy, page titles, the PWA manifest,
   PDF and print headers, CSV exports. Check this whenever you write club-facing

@@ -154,16 +154,22 @@ async function classesPanel() {
 
   const name = field("Class name", { class: "text", autocomplete: "off" });
   const py = field("Base PY", { inputMode: "numeric", autocomplete: "off" });
+  const crew = selectField("Crew", [
+    { value: "1", label: "Single-handed" },
+    { value: "2", label: "Double-handed" },
+  ]);
   const add = el("button.btn", {
     type: "button",
     text: "Add class",
     onclick: () =>
       attempt(
-        () => reg.createClass({ name: name.input.value, basePy: py.input.value }),
+        () => reg.createClass({
+          name: name.input.value, basePy: py.input.value, crewSize: crew.select.value,
+        }),
         body
       ),
   });
-  body.append(name.node, py.node, el("div.actions", {}, [add]));
+  body.append(name.node, py.node, crew.node, el("div.actions", {}, [add]));
 
   /* One-off seeding: paste the club's PY list rather than typing 40 classes. */
   const csv = el("textarea.csvbox", {
@@ -200,12 +206,24 @@ async function classesPanel() {
 
   const list = el("div.reglist");
   for (const klass of classes) {
+    const crewSize = klass.crew_size ?? 1;
+    // Crew size drives whether sign-on offers a crew field, so it has to be
+    // correctable here without a migration.
+    const toggle = selectField("", [
+      { value: "1", label: "1 up" },
+      { value: "2", label: "2 up" },
+    ], { "aria-label": `Crew size for ${klass.name}` });
+    toggle.select.value = String(crewSize);
+    toggle.select.addEventListener("change", () =>
+      attempt(() => reg.updateClass(klass.id, { crewSize: toggle.select.value }), list)
+    );
     list.append(
       el("div.regrow", {}, [
         el("div.regmain", {}, [
           el("div.regname", { text: klass.name }),
           el("div.regmeta", { text: `base PY ${klass.base_py}` }),
         ]),
+        toggle.select,
       ])
     );
   }

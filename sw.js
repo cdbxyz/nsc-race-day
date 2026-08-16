@@ -10,7 +10,7 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "f4a5b405622f";
+const VERSION = "06f8e0c71815";
 const SHELL = [
   "./",
   "./css/app.css",

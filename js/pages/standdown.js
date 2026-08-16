@@ -14,7 +14,7 @@ import { el, clear, panel, notice } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { boatState, lapPlan, raceLabel } from "./../state.js";
+import { boatState, lapPlan, raceLabel, entryLabel, entryDetail, entryPeople } from "./../state.js";
 import { sync } from "./../sync.js";
 import { navigate } from "./../router.js";
 
@@ -44,10 +44,12 @@ export default {
  */
 async function tally(raceDay) {
   const races = await rd.racesForDay(raceDay.id);
-  const boats = await db.getAll("boats");
-  const helms = await db.getAll("helms");
+  const [boats, members, classes] = await Promise.all([
+    db.getAll("boats"), db.getAll("helms"), db.getAll("classes"),
+  ]);
   const boatById = new Map(boats.map((b) => [b.id, b]));
-  const helmById = new Map(helms.map((h) => [h.id, h]));
+  const helmById = new Map(members.map((h) => [h.id, h]));
+  const classById = new Map(classes.map((c) => [c.id, c]));
 
   const byBoat = new Map();
 
@@ -65,17 +67,26 @@ async function tally(raceDay) {
     for (const entry of entries) {
       const boat = boatState(entry, events, { plan, startAt });
       const state = abandoned
-        ? { status: "abandoned", label: "race abandoned" }
+        ? { status: "abandoned", statusLabel: "race abandoned" }
         : boat.finished
-          ? { status: "finished", label: "finished" }
+          ? { status: "finished", statusLabel: "finished" }
           : boat.code
-            ? { status: "coded", label: boat.code }
-            : { status: "unaccounted", label: "not accounted for" };
+            ? { status: "coded", statusLabel: boat.code }
+            : { status: "unaccounted", statusLabel: "not accounted for" };
 
-      // The latest race this boat was in is the one that decides.
-      byBoat.set(entry.boat_id, {
-        boat: boatById.get(entry.boat_id),
-        helm: helmById.get(entry.helm_id),
+      const parts = {
+        boat: entry.boat_id ? boatById.get(entry.boat_id) ?? null : null,
+        helm: helmById.get(entry.helm_id) ?? null,
+        crew: entry.crew_id ? helmById.get(entry.crew_id) ?? null : null,
+        klass: classById.get(entry.class_id) ?? null,
+      };
+      /* Keyed on the helm, not the hull: most boats here have no hull, and
+         the helm is the identity that persists across a day. */
+      byBoat.set(entry.helm_id, {
+        parts,
+        label: entryLabel(parts),
+        detail: entryDetail(parts),
+        people: entryPeople(parts),
         raceNumber: race.number,
         raceLabel: raceLabel(race),
         entryId: entry.id,
@@ -85,12 +96,15 @@ async function tally(raceDay) {
     }
   }
 
-  const rows = [...byBoat.values()].sort((a, b) =>
-    (a.boat?.name ?? "").localeCompare(b.boat?.name ?? "")
-  );
+  const rows = [...byBoat.values()].sort((a, b) => a.label.localeCompare(b.label));
+  const unaccounted = rows.filter((r) => r.status === "unaccounted");
   return {
     rows,
-    unaccounted: rows.filter((r) => r.status === "unaccounted"),
+    unaccounted,
+    /* The tally is a headcount, not a boat count: an unaccounted
+       double-hander is TWO people still unaccounted for. */
+    peopleTotal: rows.reduce((n, r) => n + r.people.length, 0),
+    peopleUnaccounted: unaccounted.reduce((n, r) => n + r.people.length, 0),
   };
 }
 
@@ -149,17 +163,24 @@ function render() {
 /* ---- the tally check ---------------------------------------------------- */
 
 function tallyPanel() {
-  const { rows, unaccounted } = context.tally;
+  const { rows, unaccounted, peopleTotal, peopleUnaccounted } = context.tally;
   const list = el("div.reglist");
 
   for (const row of rows) {
     list.append(
       el(`div.regrow.tally-${row.status}`, {}, [
         el("div.regmain", {}, [
-          el("div.regname", { text: row.boat?.name ?? "unknown boat" }),
-          el("div.regmeta", { text: [row.helm?.name, row.raceLabel].filter(Boolean).join(" · ") }),
+          el("div.regname", { text: row.label }),
+          el("div.regmeta", {
+            /* entryDetail already names everyone aboard whenever a hull took
+               the first line; only add them when it did not, so an unaccounted
+               crew is always named without the line saying it twice. */
+            text: [row.detail || row.people.map((p) => p.name).join(" + "), row.raceLabel]
+              .filter(Boolean)
+              .join(" · "),
+          }),
         ]),
-        el("span.tallymark", { text: row.status === "unaccounted" ? "UNACCOUNTED" : row.label }),
+        el("span.tallymark", { text: row.status === "unaccounted" ? "UNACCOUNTED" : row.statusLabel }),
       ])
     );
   }
@@ -173,7 +194,7 @@ function tallyPanel() {
     children.unshift(
       el("div.panel-body", {}, [
         notice(
-          `${unaccounted.length} boat${unaccounted.length === 1 ? " is" : "s are"} not accounted for. Find ${unaccounted.length === 1 ? "it" : "them"}, then record what happened — a code (RET, DNF) is how a boat stops racing.`,
+          `${peopleUnaccounted} ${peopleUnaccounted === 1 ? "person is" : "people are"} not accounted for, in ${unaccounted.length} boat${unaccounted.length === 1 ? "" : "s"}. Find them, then record what happened — a code (RET, DNF) is how a boat stops racing.`,
           "error"
         ),
         el("div.actions", { style: "padding:0" }, [
@@ -188,7 +209,7 @@ function tallyPanel() {
   }
 
   return panel("Tally check", children, {
-    count: `${rows.length - unaccounted.length}/${rows.length}`,
+    count: `${peopleTotal - peopleUnaccounted}/${peopleTotal} people`,
   });
 }
 

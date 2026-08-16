@@ -12,7 +12,7 @@ import { el, clear, panel, notice, field, selectField } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { resultInputs, correctionFor, raceLabel, raceName } from "./../state.js";
+import { resultInputs, correctionFor, raceLabel, raceName, entryLabel, entryDetail } from "./../state.js";
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
 import { savePdf } from "./../pdf.js";
 import { navigate } from "./../router.js";
@@ -64,12 +64,19 @@ async function load() {
   const classById = new Map(classes.map((c) => [c.id, c]));
 
   const inputs = resultInputs({ race, entries, events }).map((row) => {
-    const boat = boatById.get(row.entry.boat_id);
+    const parts = {
+      boat: row.entry.boat_id ? boatById.get(row.entry.boat_id) ?? null : null,
+      helm: helmById.get(row.entry.helm_id) ?? null,
+      crew: row.entry.crew_id ? helmById.get(row.entry.crew_id) ?? null : null,
+      klass: classById.get(row.entry.class_id) ?? null,
+    };
     return {
       ...row,
-      name: boat?.name ?? "unknown",
-      helm: helmById.get(row.entry.helm_id)?.name ?? "",
-      klass: boat ? classById.get(boat.class_id)?.name ?? "" : "",
+      // Where there is no hull, the combination IS the name.
+      name: entryLabel(parts),
+      helm: [parts.helm?.name, parts.crew?.name].filter(Boolean).join(" + "),
+      klass: parts.klass?.name ?? "",
+      sailNo: parts.boat?.sail_no ?? "",
     };
   });
 
@@ -176,8 +183,9 @@ function resultsPanel() {
 function resultCard(row, editable, isOut) {
   const input = context.inputs.find((i) => i.id === row.id);
   const meta = [
-    row.helm,
+    row.name === row.helm ? null : row.helm,
     row.klass,
+    row.sailNo || null,
     pyText(row),
     isOut ? row.reason : `${row.laps} lap${row.laps === 1 ? "" : "s"}`,
   ]

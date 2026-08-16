@@ -20,6 +20,8 @@ import {
   formatClockTime,
   plannedLaps,
   raceLabel,
+  entryLabel,
+  entryDetail,
   liveEvents,
   lastUndoable,
 } from "./../state.js";
@@ -66,11 +68,12 @@ async function load() {
   const race = await rd.currentRace(raceDay.id);
   if (!race) return (context = null);
 
-  const [events, entries, boats, helms] = await Promise.all([
+  const [events, entries, boats, members, classes] = await Promise.all([
     log.eventsForRace(race.id),
     rd.entriesForRace(race.id),
     db.getAll("boats"),
     db.getAll("helms"),
+    db.getAll("classes"),
   ]);
 
   context = {
@@ -79,7 +82,8 @@ async function load() {
     events,
     entries,
     boatById: new Map(boats.map((b) => [b.id, b])),
-    helmById: new Map(helms.map((h) => [h.id, h])),
+    helmById: new Map(members.map((h) => [h.id, h])),
+    classById: new Map(classes.map((c) => [c.id, c])),
     state: raceState({ race, entries, events }),
   };
   return context;
@@ -175,7 +179,7 @@ function finishedRail(state) {
   const coded = state.done.filter((b) => b.code);
 
   const card = (boat, position) => {
-    const name = context.boatById.get(boat.entry.boat_id)?.name ?? "?";
+    const name = entryLabel(entryParts(boat.entry));
     return el("button.railcard", {
       type: "button",
       class: boat.code ? "coded" : "",
@@ -267,7 +271,7 @@ function unaccountedSheet(state) {
 
   const rows = el("div.reglist");
   for (const boat of state.unaccounted) {
-    const name = context.boatById.get(boat.entry.boat_id)?.name ?? "boat";
+    const name = entryLabel(entryParts(boat.entry));
     const codes = el("div.codesrow");
     for (const [code] of CODES) {
       codes.append(
@@ -322,18 +326,17 @@ function unaccountedSheet(state) {
 }
 
 function boatCard(boat) {
-  const boatRow = context.boatById.get(boat.entry.boat_id);
-  const helm = context.helmById.get(boat.entry.helm_id);
+  const parts = entryParts(boat.entry);
 
   const splits = formatSplits(boat.splits);
-  const meta = [helm?.name ?? "", `Lap ${boat.onLap} of ${boat.lapsPlanned}`]
+  const meta = [entryDetail(parts), `Lap ${boat.onLap} of ${boat.lapsPlanned}`]
     .filter(Boolean)
     .join(" · ");
 
   const isFinish = boat.action === "finish";
   const card = el("div.boatcard", { dataset: { entry: boat.entryId } }, [
     el("div.boatinfo", {}, [
-      el("div.boatname", { text: boatRow?.name ?? "unknown" }),
+      el("div.boatname", { text: entryLabel(parts) }),
       el("div.boatmeta", { text: meta }),
       splits ? el("div.boatsplits", { text: splits }) : null,
     ]),
@@ -345,12 +348,22 @@ function boatCard(boat) {
     el("button.morebtn", {
       type: "button",
       text: "⋯",
-      "aria-label": `More for ${boatRow?.name ?? "boat"}`,
+      "aria-label": `More for ${entryLabel(parts)}`,
       onclick: () => openSheet(boat.entryId),
     }),
   ]);
 
   return card;
+}
+
+/** The people, hull and class behind an entry, for display. */
+function entryParts(entry) {
+  return {
+    boat: entry.boat_id ? context.boatById.get(entry.boat_id) ?? null : null,
+    helm: context.helmById.get(entry.helm_id) ?? null,
+    crew: entry.crew_id ? context.helmById.get(entry.crew_id) ?? null : null,
+    klass: context.classById.get(entry.class_id) ?? null,
+  };
 }
 
 function raceControls(state) {
@@ -421,7 +434,7 @@ function boatSheet(state) {
     sheetFor = null;
     return el("div");
   }
-  const name = context.boatById.get(boat.entry.boat_id)?.name ?? "boat";
+  const name = entryLabel(entryParts(boat.entry));
   const ownLast = lastUndoable(context.events, { entryId: boat.entryId });
 
   const close = () => {
@@ -474,7 +487,7 @@ function historyDrawer() {
   for (const event of [...live].reverse()) {
     if (event.type === "sequence_started") continue;
     const entry = context.entries.find((e) => e.id === event.entry_id);
-    const boatName = entry ? context.boatById.get(entry.boat_id)?.name : "Race";
+    const boatName = entry ? entryLabel(entryParts(entry)) : "Race";
     rows.append(
       el("div.regrow", {}, [
         el("div.regmain", {}, [
