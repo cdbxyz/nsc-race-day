@@ -540,3 +540,15 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   overflow:hidden;text-overflow:ellipsis;
 }
 .railsplits{color:var(--slate);font-size:.62rem}
+
+/* ---- ending a race ---- */
+.endbar{margin-top:12px}
+.endbar .btn{width:100%;min-height:56px;font-size:1rem}
+.btn.endrace{background:var(--go);border-color:var(--go);color:#fff}
+.raceclock.frozen{color:#9FC0F0}
+.endednote{
+  background:var(--chalk);border:1px solid var(--line);border-left:3px solid var(--go);
+  border-radius:2px;padding:10px 12px;margin-top:10px;
+}
+.codesrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.codechip{min-width:0;padding:0 12px;min-height:44px;font-size:.72rem}

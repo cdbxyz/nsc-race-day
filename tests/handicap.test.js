@@ -226,3 +226,32 @@ test("the season comes from the series when there is one", () => {
 test("without a series the season is the year it was sailed", () => {
   assert.equal(seasonFor({ seriesSeason: null, raceDate: "2026-08-15" }), 2026);
 });
+
+/* ---- the fleet invariant, by name ---------------------------------------
+ * Lower PY = faster boat. Fast is strictly below 1168 and sails MORE laps.
+ * These are named boats rather than bare numbers so an inversion reads as
+ * obviously wrong to anyone scanning the failure output.
+ * --------------------------------------------------------------------- */
+
+test("a Laser 2000 at 1122 is FAST and sails 3 laps", () => {
+  const basePy = 1122;
+  assert.equal(fleetFor(basePy), "fast");
+  assert.equal(lapsFor({ fleet: fleetFor(basePy), fastLaps: 3, slowLaps: 2 }), 3);
+  assert.equal(entrySnapshot({ basePy, wins: 0 }).fleet, "fast");
+});
+
+test("a boat at 1345 is SLOW and sails 2 laps", () => {
+  const basePy = 1345;
+  assert.equal(fleetFor(basePy), "slow");
+  assert.equal(lapsFor({ fleet: fleetFor(basePy), fastLaps: 3, slowLaps: 2 }), 2);
+  assert.equal(entrySnapshot({ basePy, wins: 0 }).fleet, "slow");
+});
+
+test("the fast fleet always sails at least as many laps as the slow fleet", () => {
+  // The direction of the whole thing, in one assertion.
+  for (const [fast, slow] of [[3, 2], [2, 1], [4, 2], [1, 1]]) {
+    const fastLaps = lapsFor({ fleet: "fast", fastLaps: fast, slowLaps: slow });
+    const slowLaps = lapsFor({ fleet: "slow", fastLaps: fast, slowLaps: slow });
+    assert.ok(fastLaps >= slowLaps, `fast ${fastLaps} must be >= slow ${slowLaps}`);
+  }
+});

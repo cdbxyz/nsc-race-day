@@ -79,16 +79,16 @@ export default {
     });
     // Replaced with a tap-to-arm button, keeping the id so a second mount
     // still finds something to replace.
-    const replacement = armedButton(
-      "Clear all local data",
-      "Tap again to delete everything",
-      "danger",
-      async () => {
+    const replacement = armedButton("dev.clear", {
+      label: "Clear all local data",
+      armedLabel: "Tap again to delete everything",
+      classes: "danger",
+      onConfirm: async () => {
         await db.clearAll();
         await sync.refreshStatus();
         render();
-      }
-    );
+      },
+    });
     replacement.id = "dev-clear";
     section.querySelector("#dev-clear").replaceWith(replacement);
 

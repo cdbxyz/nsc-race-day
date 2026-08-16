@@ -8,7 +8,7 @@
  * Nothing here is recomputed later, so a published result never shifts.
  */
 
-import { el, clear, field, selectField, panel, notice, armedButton } from "./../ui.js";
+import { el, clear, field, selectField, panel, notice, armedButton, onArmChange } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as reg from "./../registers.js";
@@ -16,6 +16,7 @@ import { factorFor } from "./../handicap.js";
 import { navigate } from "./../router.js";
 
 let host = null;
+let offArm = null;
 let search = "";
 let showAddBoat = false;
 /* A boat tapped that has never raced here, so nobody knows who is helming it. */
@@ -26,10 +27,13 @@ export default {
 
   mount(section) {
     host = section.querySelector("#signon-body");
+    offArm = onArmChange(render);
     render();
   },
 
   unmount() {
+    offArm?.();
+    offArm = null;
     host = null;
     search = "";
     showAddBoat = false;
@@ -570,15 +574,15 @@ function entryEditor(data, entry, wins) {
      visible. Codes are how a boat stops racing after that. */
   if (rd.canRemoveEntries(data.race)) {
     const boat = data.boatById.get(entry.boat_id);
-    const remove = armedButton(
-      "Remove from sign-on",
-      `Tap again to remove ${boat?.name ?? "this boat"}`,
-      "danger",
-      async () => {
+    const remove = armedButton(`signon.remove.${entry.id}`, {
+      label: "Remove from sign-on",
+      armedLabel: `Tap again to remove ${boat?.name ?? "this boat"}`,
+      classes: "danger",
+      onConfirm: async () => {
         await rd.removeEntry(entry.id, data.race);
         await render();
-      }
-    );
+      },
+    });
     wrap.append(el("div.actions", {}, [remove]));
   } else {
     wrap.append(

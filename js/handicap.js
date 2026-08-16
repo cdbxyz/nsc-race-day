@@ -58,7 +58,24 @@ export function personalPy(basePy, factor) {
   return Math.round(Number(basePy) * Number(factor) * 100) / 100;
 }
 
-/** How many laps this entry is due, most specific rule first. */
+/**
+ * How many laps this entry is due, most specific rule first.
+ *
+ * THE FLEET INVARIANT, stated once for the whole app:
+ *
+ *   Lower PY = faster boat.
+ *   fast fleet = base_py STRICTLY BELOW 1168, sails MORE laps (3 by default)
+ *   slow fleet = base_py 1168 AND ABOVE,      sails FEWER laps (2 by default)
+ *
+ *   A Laser 2000 at 1122 is FAST and sails 3.
+ *   A boat at 1345 is SLOW and sails 2.
+ *   1168 itself is SLOW — the boundary is exclusive.
+ *
+ * Everything downstream — fleetFor, plannedLaps, the sign-on card's
+ * "Fast, 3 laps", the live card's "of n", the shorten sheet — derives from
+ * this one place. If a fleet ever looks inverted on screen, check the label
+ * before the logic: "3/2" without words is the ambiguous thing, not the rule.
+ */
 export function lapsFor({ fleet, lapsOverride, fastLaps, slowLaps }) {
   if (lapsOverride != null && lapsOverride !== "") return Number(lapsOverride);
   return fleet === "fast"

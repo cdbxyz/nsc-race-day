@@ -8,7 +8,7 @@
  * Visual only. The horn is the real signal; this is the thing beside it.
  */
 
-import { el, clear, panel, notice, field, armedButton } from "./../ui.js";
+import { el, clear, panel, notice, field, armedButton, onArmChange } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -23,6 +23,11 @@ let context = null;
    rather than by a timer that a sleeping phone would simply miss. */
 let lastSeconds = null;
 let handedOver = false;
+let offArm = null;
+/* The live nodes the tick updates, so the panel — and its buttons — are built
+   once rather than four times a second. Replacing a button mid-gesture is a
+   good way to make it untappable. */
+let live = null;
 
 export default {
   title: "Start sequence",
@@ -33,13 +38,17 @@ export default {
     handedOver = false;
     await load();
     render();
-    // A repaint every 250ms keeps the seconds honest without being a clock.
-    ticker = setInterval(render, 250);
+    offArm = onArmChange(render);
+    // Only the digits move; see tick().
+    ticker = setInterval(tick, 250);
   },
 
   unmount() {
     if (ticker) clearInterval(ticker);
     ticker = null;
+    offArm?.();
+    offArm = null;
+    live = null;
     host = null;
     context = null;
     allowSleep();
@@ -62,8 +71,33 @@ async function reload() {
   render();
 }
 
+/** Move the clock without rebuilding anything that can be tapped. */
+function tick() {
+  if (!host || !context || !live) return;
+  const sequence = sequenceState(context.events);
+  if (!sequence.running) return render();
+
+  const clock = countdown(sequence.startAt, Date.now());
+
+  for (const mark of marksCrossed(lastSeconds, clock.remainingSeconds)) {
+    navigator.vibrate?.(mark.at === 0 ? [200, 80, 200] : 120);
+  }
+  lastSeconds = clock.remainingSeconds;
+
+  if (clock.started && !handedOver) {
+    handedOver = true;
+    startRacing(context.race, sequence.startAt);
+    return;
+  }
+
+  live.clock.textContent = clock.display;
+  live.flag.textContent = clock.phase.label;
+  live.panel.className = `countdown tone-${clock.phase.tone}`;
+}
+
 function render() {
   if (!host) return;
+  live = null;
 
   if (!context) {
     clear(host).append(
@@ -87,8 +121,7 @@ function render() {
 
   keepAwake();
 
-  const now = Date.now();
-  const clock = countdown(sequence.startAt, now);
+  const clock = countdown(sequence.startAt, Date.now());
 
   // Pulse on each mark. Comparing two readings catches marks that passed while
   // the phone was asleep, and cannot fire the same one twice.
@@ -138,10 +171,13 @@ function armPanel(race, entries, sequence) {
 function countdownPanel(race, clock, sequence) {
   const phase = clock.phase;
 
+  const clockNode = el("div.cd-clock", { text: clock.display });
+  const flagNode = el("div.cd-flag", { text: phase.label });
+
   const wrap = el(`div.countdown.tone-${phase.tone}`, {}, [
     el("div.eyebrow", { text: `Race ${race.number}` }),
-    el("div.cd-clock", { text: clock.display }),
-    el("div.cd-flag", { text: phase.label }),
+    clockNode,
+    flagNode,
     sequence.generalRecalls
       ? el("div.cd-note", {
           text: `${sequence.generalRecalls} general recall${sequence.generalRecalls === 1 ? "" : "s"}`,
@@ -156,18 +192,29 @@ function countdownPanel(race, clock, sequence) {
      the wrong trade — but so is a pocket-tap voiding the sequence, so the
      second tap has to land within a few seconds or the button disarms. */
   const controls = el("div.cd-controls", {}, [
-    armedButton("Postpone (AP)", "Tap again to postpone", "ghost", async () => {
-      await log.postpone(race.id);
-      lastSeconds = null;
-      await reload();
+    armedButton("sequence.postpone", {
+      label: "Postpone (AP)",
+      armedLabel: "Tap again to postpone",
+      classes: "ghost",
+      onConfirm: async () => {
+        await log.postpone(race.id);
+        lastSeconds = null;
+        await reload();
+      },
     }),
-    armedButton("General recall", "Tap again to recall", "danger", async () => {
-      await log.generalRecall(race.id);
-      lastSeconds = null;
-      await reload();
+    armedButton("sequence.recall", {
+      label: "General recall",
+      armedLabel: "Tap again to recall",
+      classes: "danger",
+      onConfirm: async () => {
+        await log.generalRecall(race.id);
+        lastSeconds = null;
+        await reload();
+      },
     }),
   ]);
 
+  live = { clock: clockNode, flag: flagNode, panel: wrap };
   return el("div", {}, [wrap, controls]);
 }
 

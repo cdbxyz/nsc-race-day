@@ -25,6 +25,7 @@ import {
   raceState,
   formatElapsed,
   formatSplits,
+  raceClock,
 } from "../js/state.js";
 
 const RACE = { id: "r1", fast_laps: 3, slow_laps: 2, start_at: null };
@@ -550,4 +551,113 @@ test("elapsed formatting matches the race clock's units", () => {
   assert.equal(formatElapsed(252_000), "4:12");
   assert.equal(formatElapsed(3_852_000), "1:04:12");
   assert.equal(formatElapsed(26_000), "0:26");
+});
+
+/* ---------------------------------------------------------------------------
+ * Ending a race
+ *
+ * A race used to have no ending — the clock ran on for ever. Ending is now an
+ * explicit act, recorded like anything else, and therefore undoable.
+ * ------------------------------------------------------------------------ */
+
+test("a race cannot be ended while a boat is still out", () => {
+  const entries = [entry("en1"), entry("en2")];
+  const events = [ev("boat_finished", { entry_id: "en1", occurred_at: at(1800) })];
+  const state = raceState({ race: RACE, entries, events });
+
+  assert.equal(state.canEnd, false);
+  assert.equal(state.unaccounted.length, 1);
+  assert.equal(state.unaccounted[0].entryId, "en2");
+});
+
+test("once every boat is home or coded the race may be ended", () => {
+  const entries = [entry("en1"), entry("en2")];
+  const events = [
+    ev("boat_finished", { entry_id: "en1", occurred_at: at(1800) }),
+    ev("code_applied", { entry_id: "en2", payload: { code: "DNF" }, occurred_at: at(1900) }),
+  ];
+  const state = raceState({ race: RACE, entries, events });
+
+  assert.equal(state.canEnd, true);
+  assert.equal(state.unaccounted.length, 0);
+});
+
+test("coding everyone still out — the expired time limit — unblocks the ending", () => {
+  const entries = [entry("en1"), entry("en2"), entry("en3")];
+  const finished = [ev("boat_finished", { entry_id: "en1", occurred_at: at(1800) })];
+
+  assert.equal(raceState({ race: RACE, entries, events: finished }).canEnd, false);
+
+  const bulkDnf = [
+    ...finished,
+    ev("code_applied", { entry_id: "en2", payload: { code: "DNF" }, occurred_at: at(2000) }),
+    ev("code_applied", { entry_id: "en3", payload: { code: "DNF" }, occurred_at: at(2000) }),
+  ];
+  assert.equal(raceState({ race: RACE, entries, events: bulkDnf }).canEnd, true);
+});
+
+test("an empty race cannot be ended", () => {
+  assert.equal(raceState({ race: RACE, entries: [], events: [] }).canEnd, false);
+});
+
+test("ending records when, and stops every boat's button", () => {
+  const entries = [entry("en1")];
+  const events = [
+    ev("boat_finished", { entry_id: "en1", occurred_at: at(1800) }),
+    ev("race_ended", { occurred_at: at(1900) }),
+  ];
+  const state = raceState({ race: RACE, entries, events });
+
+  assert.equal(state.ended, true);
+  assert.equal(state.endedAt, T0 + 1_900_000);
+  assert.equal(state.canEnd, false, "it is already over");
+  assert.equal(state.boats[0].action, null);
+});
+
+test("the clock freezes at the ending", () => {
+  const startAt = T0;
+  const endedAt = T0 + 1_900_000;
+
+  assert.equal(raceClock(startAt, T0 + 1_000_000), "16:40", "running");
+  assert.equal(raceClock(startAt, T0 + 5_000_000, endedAt), "31:40", "frozen at the ending");
+  assert.equal(
+    raceClock(startAt, T0 + 9_000_000, endedAt),
+    raceClock(startAt, T0 + 5_000_000, endedAt),
+    "and stays there however long ago it was"
+  );
+});
+
+test("undoing the ending puts the race back", () => {
+  const entries = [entry("en1"), entry("en2")];
+  const base = [ev("boat_finished", { entry_id: "en1", occurred_at: at(1800) })];
+  const end = ev("race_ended", { id: "end1", occurred_at: at(1900) });
+
+  const ended = raceState({ race: RACE, entries, events: [...base, end] });
+  assert.equal(ended.ended, true);
+  assert.equal(ended.boats[1].action, null, "nothing tappable while it is over");
+
+  const resumed = raceState({ race: RACE, entries, events: [...base, end, undo("end1")] });
+  assert.equal(resumed.ended, false);
+  assert.equal(resumed.endedAt, null);
+  assert.equal(resumed.boats[1].action, "lap", "the boat still out can be recorded again");
+  assert.equal(raceClock(T0, T0 + 5_000_000, resumed.endedAt), "1:23:20", "clock running again");
+});
+
+test("ending is an ordinary event, so the history drawer can undo it", () => {
+  const events = [
+    ev("boat_finished", { id: "f1", entry_id: "en1", occurred_at: at(1800) }),
+    ev("race_ended", { id: "end1", occurred_at: at(1900) }),
+  ];
+  assert.equal(lastUndoable(events).id, "end1");
+});
+
+test("an abandoned race is not an ended one", () => {
+  const state = raceState({
+    race: RACE,
+    entries: [entry("en1")],
+    events: [ev("race_abandoned", { occurred_at: at(900) })],
+  });
+  assert.equal(state.abandoned, true);
+  assert.equal(state.ended, false);
+  assert.equal(state.canEnd, false, "an abandoned race has nothing to end");
 });

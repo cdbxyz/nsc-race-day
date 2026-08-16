@@ -85,37 +85,104 @@ export function datalist(id, values) {
   return el("datalist", { id }, values.map((v) => el("option", { value: v })));
 }
 
-/**
- * A button that needs two taps instead of a blocking confirm.
+/* ---------------------------------------------------------------------------
+ * Tap to arm
  *
- * Native alert/confirm/prompt are banned in this app: they freeze the page,
- * are miserable on a phone, and cannot show what the action would actually do.
- * The first tap arms the button and says so; the second acts. It disarms
- * itself after a few seconds so a stray tap never leaves a live control primed.
- */
-export function armedButton(label, armedLabel, classes, action) {
-  let armed = false;
-  let timer = null;
+ * Native alert/confirm/prompt are banned here: they freeze the page, are
+ * miserable on a phone, and cannot show what the action would do. A destructive
+ * control instead needs two taps — the first arms it, the second acts.
+ *
+ * The armed state lives HERE, keyed by action id, and deliberately not on the
+ * button. It used to live in the button's own closure, which meant any
+ * re-render destroyed it: the start sequence page repaints four times a second
+ * to move the countdown, so an armed button was replaced within 250ms and the
+ * second tap never found it armed.
+ * ------------------------------------------------------------------------ */
 
-  const button = el(`button.btn.${classes}`, {
+const ARM_WINDOW_MS = 5000;
+const armedUntil = new Map();
+const armListeners = new Set();
+let armTimer = null;
+
+function notifyArmChange() {
+  for (const fn of armListeners) {
+    try {
+      fn();
+    } catch (err) {
+      console.error("arm listener failed", err);
+    }
+  }
+}
+
+/** Re-render when something arms or disarms. Returns an unsubscribe. */
+export function onArmChange(fn) {
+  armListeners.add(fn);
+  return () => armListeners.delete(fn);
+}
+
+export function isArmed(id) {
+  const until = armedUntil.get(id);
+  if (!until) return false;
+  if (Date.now() > until) {
+    armedUntil.delete(id);
+    return false;
+  }
+  return true;
+}
+
+export function disarmAll({ quiet = false } = {}) {
+  if (!armedUntil.size) return false;
+  armedUntil.clear();
+  clearTimeout(armTimer);
+  if (!quiet) notifyArmChange();
+  return true;
+}
+
+function arm(id) {
+  // Only ever one thing armed: arming Abandon must not leave Postpone primed.
+  armedUntil.clear();
+  armedUntil.set(id, Date.now() + ARM_WINDOW_MS);
+  clearTimeout(armTimer);
+  armTimer = setTimeout(() => {
+    armedUntil.delete(id);
+    notifyArmChange();
+  }, ARM_WINDOW_MS);
+  notifyArmChange();
+}
+
+/* A tap anywhere else disarms, so nothing stays primed while the OOD is doing
+   something unrelated. Registered once, on the bubble phase, after the
+   button's own handler has run. */
+if (typeof document !== "undefined") {
+  document.addEventListener("click", (event) => {
+    if (event.target?.closest?.("[data-arm]")) return;
+    disarmAll();
+  });
+}
+
+/**
+ * A button that needs two taps.
+ *
+ * @param {string} id stable identity for this action, so the armed state
+ *        survives the page being re-rendered underneath it.
+ */
+export function armedButton(id, { label, armedLabel, classes = "", onConfirm }) {
+  const active = isArmed(id);
+
+  const button = el(`button.btn.${classes}${active ? " armed" : ""}`, {
     type: "button",
-    text: label,
+    text: active ? armedLabel : label,
+    "data-arm": id,
+    "aria-live": "polite",
     onclick: async () => {
-      if (!armed) {
-        armed = true;
-        button.textContent = armedLabel;
-        button.classList.add("armed");
+      if (!isArmed(id)) {
+        arm(id);
         navigator.vibrate?.(20);
-        timer = setTimeout(() => {
-          armed = false;
-          button.textContent = label;
-          button.classList.remove("armed");
-        }, 4000);
         return;
       }
-      clearTimeout(timer);
+      disarmAll({ quiet: true });
       button.disabled = true;
-      await action();
+      await onConfirm();
     },
   });
 

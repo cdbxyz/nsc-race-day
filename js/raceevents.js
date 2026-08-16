@@ -52,6 +52,12 @@ export const shortenCourse = (raceId, { fastLaps, slowLaps }) =>
 export const abandonRace = (raceId) => append(raceId, "race_abandoned");
 
 /**
+ * Close the race. Explicit, never automatic: the OOD decides when the last
+ * boat is home. Undoable, because a race closed by mistake is still running.
+ */
+export const endRace = (raceId) => append(raceId, "race_ended");
+
+/**
  * Adjust a boat's result before publishing. The payload keys are a contract
  * shared with 003_views.sql, which computes the same answers in Postgres —
  * change one and you must change the other.

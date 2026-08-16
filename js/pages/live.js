@@ -8,7 +8,7 @@
  * presses, no swipes, no gesture anyone has to remember with wet hands.
  */
 
-import { el, clear, panel, notice, field } from "./../ui.js";
+import { el, clear, panel, notice, field, armedButton, onArmChange } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -31,6 +31,7 @@ let ticker = null;
 let sheetFor = null;
 let showHistory = false;
 let raceSheet = null;
+let offArm = null;
 
 export default {
   title: "Live race",
@@ -40,6 +41,7 @@ export default {
     sheetFor = null;
     showHistory = false;
     raceSheet = null;
+    offArm = onArmChange(render);
     await reload();
     keepAwake();
     // Only the race clock needs a tick; everything else redraws on write.
@@ -49,6 +51,8 @@ export default {
   unmount() {
     if (ticker) clearInterval(ticker);
     ticker = null;
+    offArm?.();
+    offArm = null;
     host = null;
     context = null;
     allowSleep();
@@ -87,8 +91,10 @@ async function reload() {
 
 function updateClock() {
   if (!context || !host) return;
+  const { state } = context;
+  if (state.ended) return; // frozen at the ending
   const node = host.querySelector("#race-clock");
-  if (node) node.textContent = raceClock(context.state.startAt, Date.now()) ?? "—";
+  if (node) node.textContent = raceClock(state.startAt, Date.now(), state.endedAt) ?? "—";
 }
 
 /* ---- render ------------------------------------------------------------- */
@@ -117,26 +123,35 @@ function render() {
 
   const node = el("div");
   node.append(clockBar(state));
+  if (state.ended) node.append(endedPanel(state));
   if (state.done.length) node.append(finishedRail(state));
-  node.append(racingGrid(state));
+  if (!state.ended) node.append(racingGrid(state));
+  node.append(endBar(state));
   node.append(raceControls(state));
   if (sheetFor) node.append(boatSheet(state));
   if (showHistory) node.append(historyDrawer());
   if (raceSheet?.kind === "shorten") node.append(shortenSheet(state));
   if (raceSheet?.kind === "abandon") node.append(abandonSheet(state));
+  if (raceSheet?.kind === "unaccounted") node.append(unaccountedSheet(state));
 
   clear(host).append(node);
 }
 
 function clockBar(state) {
+  // Spell the fleets out: "3/2" alone is readable in either direction, and
+  // this header is the most likely place to misread the lap plan.
   const shortened = state.shortened
-    ? ` · shortened to ${state.plan.fast}/${state.plan.slow}`
-    : ` · ${state.plan.fast}/${state.plan.slow} laps`;
+    ? ` · shortened to ${state.plan.fast} fast / ${state.plan.slow} slow`
+    : ` · ${state.plan.fast} fast / ${state.plan.slow} slow`;
 
   return el("div.clockbar", {}, [
     el("div.clockbar-main", {}, [
       el("div.eyebrow", { text: `Race ${context.race.number}${shortened}` }),
-      el("div.raceclock", { id: "race-clock", text: raceClock(state.startAt, Date.now()) ?? "—" }),
+      el("div.raceclock", {
+        id: "race-clock",
+        class: state.ended ? "frozen" : "",
+        text: raceClock(state.startAt, Date.now(), state.endedAt) ?? "—",
+      }),
     ]),
     el("button.kill.undoall", {
       type: "button",
@@ -183,21 +198,126 @@ function finishedRail(state) {
 
 function racingGrid(state) {
   const grid = el("div.boatgrid");
+  for (const boat of state.racing) grid.append(boatCard(boat));
+  if (!state.racing.length) {
+    grid.append(el("div.empty", {}, [el("p", { text: "Every boat is home or coded." })]));
+  }
+  return grid;
+}
 
-  for (const boat of state.racing) {
-    grid.append(boatCard(boat));
+/**
+ * Ending the race. Never automatic — the OOD decides when the last boat is in,
+ * and a time limit expiring is a judgement call, not a timer.
+ */
+function endBar(state) {
+  if (state.ended) {
+    return el("div.actions", { style: "padding:12px 0 0" }, [
+      el("button.btn", { type: "button", text: "Results →", onclick: () => navigate("results") }),
+    ]);
   }
 
-  if (!state.racing.length) {
-    grid.append(
-      el("div.empty", {}, [
-        el("p", { text: "Every boat is accounted for." }),
-        el("button.btn", { type: "button", text: "Results →", onclick: () => finishRace() }),
+  const outstanding = state.unaccounted.length;
+
+  if (outstanding) {
+    return el("div.endbar", {}, [
+      el("button.btn.ghost", {
+        type: "button",
+        text: `End race · ${outstanding} still out`,
+        onclick: () => {
+          raceSheet = { kind: "unaccounted" };
+          render();
+        },
+      }),
+    ]);
+  }
+
+  return el("div.endbar", {}, [
+    armedButton("live.endRace", {
+      label: "End race",
+      armedLabel: "Tap again to end the race",
+      classes: "endrace",
+      onConfirm: () => endRaceNow(),
+    }),
+  ]);
+}
+
+function endedPanel(state) {
+  return el("div.endednote", {}, [
+    el("div.eyebrow", { text: "Race over" }),
+    el("div.regmeta", {
+      text: "Recorded in the log. Undo it from History if the race is still running.",
+    }),
+  ]);
+}
+
+async function endRaceNow() {
+  await log.endRace(context.race.id);
+  await rd.setRaceStatusIfEarlier(context.race, "finished");
+  navigator.vibrate?.([60, 40, 60]);
+  navigate("results");
+}
+
+/** Who is still out, and how to account for them. */
+function unaccountedSheet(state) {
+  const close = () => {
+    raceSheet = null;
+    render();
+  };
+
+  const rows = el("div.reglist");
+  for (const boat of state.unaccounted) {
+    const name = context.boatById.get(boat.entry.boat_id)?.name ?? "boat";
+    const codes = el("div.codesrow");
+    for (const [code] of CODES) {
+      codes.append(
+        el("button.kill.codechip", {
+          type: "button",
+          text: code,
+          onclick: async () => {
+            await log.applyCode(context.race.id, boat.entryId, code);
+            await reload();
+          },
+        })
+      );
+    }
+    rows.append(
+      el("div.regrow", {}, [
+        el("div.regmain", {}, [
+          el("div.regname", { text: name }),
+          el("div.regmeta", { text: `Lap ${boat.onLap} of ${boat.lapsPlanned}` }),
+          codes,
+        ]),
       ])
     );
   }
 
-  return grid;
+  return el("div.sheetscrim", {
+    onclick: (e) => e.target.classList.contains("sheetscrim") && close(),
+  }, [
+    el("div.boatsheet", {}, [
+      el("div.eyebrow", { text: "Still on the water" }),
+      el("h2", { text: `${state.unaccounted.length} boat${state.unaccounted.length === 1 ? "" : "s"} unaccounted` }),
+      el("p.stub", {
+        text: "The race cannot end while a boat is unaccounted for — that list is what stand-down checks. Give each one a code, or code them all DNF if the time limit has expired.",
+      }),
+      rows,
+      el("div.actions", {}, [
+        armedButton("live.bulkDnf", {
+          label: "Code all remaining as DNF",
+          armedLabel: "Tap again to code them all DNF",
+          classes: "danger",
+          onConfirm: async () => {
+            for (const boat of state.unaccounted) {
+              await log.applyCode(context.race.id, boat.entryId, "DNF");
+            }
+            raceSheet = null;
+            await reload();
+          },
+        }),
+        el("button.btn.ghost", { type: "button", text: "Back to the race", onclick: close }),
+      ]),
+    ]),
+  ]);
 }
 
 function boatCard(boat) {
@@ -463,7 +583,7 @@ function shortenSheet(state) {
 
   return sheet("Shorten course", [
     el("p.confirmline", {
-      text: `${state.plan.fast}/${state.plan.slow} laps → ${raceSheet.fast}/${raceSheet.slow}`,
+      text: `${state.plan.fast} fast / ${state.plan.slow} slow → ${raceSheet.fast} fast / ${raceSheet.slow} slow`,
     }),
     el("p.stub", {
       text: affected.length
@@ -540,11 +660,6 @@ function sheet(title, children) {
   }, [
     el("div.boatsheet", {}, [el("div.eyebrow", { text: "Race" }), el("h2", { text: title }), ...children]),
   ]);
-}
-
-async function finishRace() {
-  await rd.setRaceStatusIfEarlier(context.race, "finished");
-  navigate("results");
 }
 
 function abandonedPanel() {

@@ -251,6 +251,12 @@ export function boatState(entry, events, { plan, startAt = null }) {
 export function raceState({ race, entries = [], events = [] }) {
   const live = liveEvents(events);
   const abandoned = live.some((e) => e.type === "race_abandoned");
+
+  /* Ending is an explicit act, recorded like anything else, so undoing it is
+     just an event_undone and the race is live again. */
+  const endEvent = live.filter((e) => e.type === "race_ended").pop() ?? null;
+  const ended = Boolean(endEvent);
+  const endedAt = endEvent ? ms(endEvent.occurred_at) : null;
   const sequence = sequenceState(events);
   const plan = lapPlan(race, events);
 
@@ -258,10 +264,12 @@ export function raceState({ race, entries = [], events = [] }) {
   // page is right the instant the countdown hits zero, before the write lands.
   const startAt = ms(race?.start_at) ?? sequence.startAt ?? null;
 
-  const boats = entries.map((entry) => ({
-    entry,
-    ...boatState(entry, events, { plan, startAt }),
-  }));
+  const boats = entries.map((entry) => {
+    const boat = { entry, ...boatState(entry, events, { plan, startAt }) };
+    // Once the race is over, nothing more can be tapped onto a boat.
+    if (ended) boat.action = null;
+    return boat;
+  });
 
   const racing = boats.filter((b) => !b.finished && !b.code);
   const done = boats.filter((b) => b.finished || b.code);
@@ -272,11 +280,17 @@ export function raceState({ race, entries = [], events = [] }) {
     sequence,
     startAt,
     abandoned,
+    ended,
+    endedAt,
     boats,
     racing,
     done,
     shortened: live.some((e) => e.type === "course_shortened"),
     allAccountedFor: racing.length === 0 && boats.length > 0,
+    /* The race may only be ended once every boat is home or coded — the same
+       rule stand-down enforces for the whole day, applied per race. */
+    canEnd: !ended && !abandoned && racing.length === 0 && boats.length > 0,
+    unaccounted: racing,
   };
 }
 
@@ -338,11 +352,14 @@ export function resultInputs({ race, entries = [], events = [] }) {
   });
 }
 
-/** Elapsed race time, for the pinned clock. */
-export function raceClock(startAt, now) {
+/**
+ * Elapsed race time for the pinned clock. Freezes at the ending, so a finished
+ * race shows how long it took rather than how long ago it was.
+ */
+export function raceClock(startAt, now, endedAt = null) {
   if (startAt == null) return null;
-  const elapsed = Math.max(0, now - startAt);
-  return formatElapsed(elapsed);
+  const until = endedAt ?? now;
+  return formatElapsed(Math.max(0, until - startAt));
 }
 
 /**
