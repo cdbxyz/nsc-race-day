@@ -12,7 +12,7 @@ import { el, clear, panel, notice, field, armedButton, onArmChange } from "./../
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { sequenceState, countdown, marksCrossed } from "./../state.js";
+import { sequenceState, countdown, marksCrossed, raceLabel } from "./../state.js";
 import { keepAwake, allowSleep } from "./../wakelock.js";
 import { navigate } from "./../router.js";
 
@@ -146,7 +146,7 @@ function armPanel(race, entries, sequence) {
     body.append(notice("Sequence postponed (AP). Start again when the fleet is ready.", "info"));
   }
   body.append(
-    el("div.regname", { text: `Race ${race.number} · ${entries.length} boats signed on` }),
+    el("div.regname", { text: `${raceLabel(race)} · ${entries.length} boats signed on` }),
     el("p.stub", {
       text: "Ten minutes from the tap: class flag at 10, P flag at 5, P down at 1, start at 0. The phone is a visual aid — the horn is the signal.",
     })
@@ -175,7 +175,7 @@ function countdownPanel(race, clock, sequence) {
   const flagNode = el("div.cd-flag", { text: phase.label });
 
   const wrap = el(`div.countdown.tone-${phase.tone}`, {}, [
-    el("div.eyebrow", { text: `Race ${race.number}` }),
+    el("div.eyebrow", { text: raceLabel(race) }),
     clockNode,
     flagNode,
     sequence.generalRecalls

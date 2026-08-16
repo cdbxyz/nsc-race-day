@@ -7,6 +7,7 @@
  */
 
 import * as db from "./db.js";
+import { raceLabel } from "./state.js";
 
 /** Where each race status wants the OOD to be. Phases 3-5 reuse this map. */
 export const ROUTE_FOR_STATUS = {
@@ -67,7 +68,7 @@ export async function findResumePoint() {
     raceDay,
     race,
     route: race ? ROUTE_FOR_STATUS[race.status] : "setup",
-    headline: race ? `Race ${race.number} · ${STATUS_LABEL[race.status]}` : "Race day setup",
+    headline: race ? `${raceLabel(race)} · ${STATUS_LABEL[race.status]}` : "Race day setup",
     detail: [formatDate(raceDay.date), raceDay.ood_name && `OOD ${raceDay.ood_name}`]
       .filter(Boolean)
       .join(" · "),

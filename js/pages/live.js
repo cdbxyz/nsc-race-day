@@ -19,6 +19,7 @@ import {
   formatSplits,
   formatClockTime,
   plannedLaps,
+  raceLabel,
   liveEvents,
   lastUndoable,
 } from "./../state.js";
@@ -146,7 +147,7 @@ function clockBar(state) {
 
   return el("div.clockbar", {}, [
     el("div.clockbar-main", {}, [
-      el("div.eyebrow", { text: `Race ${context.race.number}${shortened}` }),
+      el("div.eyebrow", { text: `${raceLabel(context.race)}${shortened}` }),
       el("div.raceclock", {
         id: "race-clock",
         class: state.ended ? "frozen" : "",
@@ -633,7 +634,7 @@ function abandonSheet(state) {
   }
 
   return sheet("Abandon race", [
-    el("p.confirmline", { text: `Race ${context.race.number} · ${state.boats.length} boats` }),
+    el("p.confirmline", { text: `${raceLabel(context.race)} · ${state.boats.length} boats` }),
     el("p.stub", { text: "This is recorded in the log and cannot be taken back from here." }),
     el("div.actions", {}, [
       el("button.btn.danger", {

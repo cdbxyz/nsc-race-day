@@ -7,6 +7,7 @@
  */
 
 import { el, clear, field, selectField, panel, notice, datalist } from "./../ui.js";
+import { raceLabel } from "./../state.js";
 import * as rd from "./../raceday.js";
 import { navigate } from "./../router.js";
 
@@ -48,7 +49,13 @@ async function render() {
   const ood = field("Officer of the Day", { class: "text", list: suggestionsId, autocomplete: "off" });
   const ro1 = field("Race Officer 1", { class: "text", list: suggestionsId, autocomplete: "off" });
   const ro2 = field("Race Officer 2", { class: "text", list: suggestionsId, autocomplete: "off" });
-  const races = field("Races planned", { type: "number", min: 1, max: 10, value: 2, inputMode: "numeric" });
+  // One race by default: most days are one, and adding another is a tap.
+  const races = field("Races planned", { type: "number", min: 1, max: 10, value: 1, inputMode: "numeric" });
+  const raceName = field("Race name (optional)", {
+    class: "text",
+    autocomplete: "off",
+    placeholder: "e.g. Whittaker Cup",
+  });
 
   const seriesOptions = [
     { value: "", label: "— no series —" },
@@ -91,6 +98,7 @@ async function render() {
           oodName: ood.input.value,
           ro1Name: ro1.input.value,
           ro2Name: ro2.input.value,
+          raceName: raceName.input.value,
           seriesId,
           raceCount: races.input.value,
         });
@@ -110,7 +118,8 @@ async function render() {
     ro2.node,
     seriesPick.node,
     newSeriesBlock,
-    races.node
+    races.node,
+    raceName.node
   );
 
   clear(host).append(
@@ -121,25 +130,88 @@ async function render() {
 
 async function alreadyOpenPanel(day) {
   const races = await rd.racesForDay(day.id);
-  const sailed = races.filter((r) => r.status !== "setup").length;
+
+  const list = el("div.reglist");
+  for (const race of races) {
+    list.append(
+      el("div.regrow", {}, [
+        el("div.regmain", {}, [
+          el("div.regname", { text: raceLabel(race) }),
+          el("div.regmeta", { text: race.status }),
+        ]),
+        race.status === "published"
+          ? null
+          : el("button.kill", {
+              type: "button",
+              text: race.name ? "Rename" : "Name",
+              onclick: () => renameRace(race),
+            }),
+      ])
+    );
+  }
+
+  const addName = field("Name (optional)", {
+    class: "text",
+    autocomplete: "off",
+    placeholder: "e.g. Whittaker Cup",
+  });
+
+  const add = el("button.btn.ghost", {
+    type: "button",
+    text: "+ Add race",
+    onclick: async () => {
+      add.disabled = true;
+      await rd.addRace(day, { name: addName.input.value });
+      await render();
+    },
+  });
 
   return el("div", {}, [
-    panel("Race day in progress", [
-      el("div.panel-body", {}, [
-        el("div.regname", { text: `${day.date} · OOD ${day.ood_name}` }),
-        el("div.regmeta", {
-          text: `${races.length} race${races.length === 1 ? "" : "s"} planned, ${sailed} under way or done`,
-        }),
-        el("p.stub", {
-          text: "A day stays open until stand-down. Carry on where you left off.",
-        }),
-      ]),
-      el("div.actions", {}, [
-        el("button.btn", { type: "button", text: "Go to sign-on", onclick: () => navigate("signon") }),
-      ]),
-    ]),
+    panel(
+      "Race day in progress",
+      [
+        el("div.panel-body", {}, [
+          el("div.regname", { text: `${day.date} · OOD ${day.ood_name}` }),
+          el("p.stub", { text: "A day stays open until stand-down. Carry on where you left off." }),
+        ]),
+        list,
+        el("div.panel-body", {}, [addName.node]),
+        el("div.actions", {}, [
+          el("button.btn", { type: "button", text: "Go to sign-on", onclick: () => navigate("signon") }),
+          add,
+        ]),
+      ],
+      { count: `${races.length}` }
+    ),
     registersLink(),
   ]);
+}
+
+/** Inline rename, so a trophy race can be labelled whenever someone says so. */
+function renameRace(race) {
+  const body = el("div.panel-body.subform");
+  const name = field("Race name", {
+    class: "text",
+    autocomplete: "off",
+    value: race.name ?? "",
+    placeholder: "e.g. Whittaker Cup",
+  });
+  body.append(
+    name.node,
+    el("div.actions", {}, [
+      el("button.btn", {
+        type: "button",
+        text: "Save name",
+        onclick: async () => {
+          await rd.setRaceName(race, name.input.value);
+          await render();
+        },
+      }),
+      el("button.btn.ghost", { type: "button", text: "Cancel", onclick: () => render() }),
+    ])
+  );
+  clear(host).append(panel(raceLabel(race), [body]));
+  name.input.focus();
 }
 
 function registersLink() {

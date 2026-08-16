@@ -13,6 +13,7 @@ import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as reg from "./../registers.js";
 import { factorFor } from "./../handicap.js";
+import { raceLabel } from "./../state.js";
 import { navigate } from "./../router.js";
 
 let host = null;
@@ -121,7 +122,7 @@ function headerPanel(data) {
   return el("div.raceline", {}, [
     el("div.raceline-main", {}, [
       el("div.eyebrow", { text: `${raceDay.date} · OOD ${raceDay.ood_name}` }),
-      el("div.raceline-title", { text: `Race ${race.number}` }),
+      el("div.raceline-title", { text: raceLabel(race) }),
       el("div.regmeta", {
         text: [
           series ? `${series.name} ${series.season}` : `Season ${data.season}`,

@@ -86,8 +86,9 @@ export async function createRaceDay({
   oodName,
   ro1Name,
   ro2Name,
+  raceName = "",
   seriesId = null,
-  raceCount = 2,
+  raceCount = 1,
   fastLaps = 3,
   slowLaps = 2,
 }) {
@@ -113,7 +114,8 @@ export async function createRaceDay({
       race_day_id: raceDay.id,
       series_id: seriesId || null,
       number,
-      name: null,
+      // Only the first race is named at setup; the rest are nameable later.
+      name: number === 1 ? String(raceName ?? "").trim() || null : null,
       status: "setup",
       sequence_start_at: null,
       start_at: null,
@@ -126,6 +128,40 @@ export async function createRaceDay({
   }
 
   return { raceDay, races };
+}
+
+/**
+ * Add another race to the day. Race days grow — the OOD plans one, the wind
+ * holds, and suddenly there are three — so this must not mean going back to
+ * setup.
+ */
+export async function addRace(raceDay, { name = "" } = {}) {
+  const races = await racesForDay(raceDay.id);
+  const previous = races[races.length - 1] ?? null;
+  const race = {
+    id: db.newId(),
+    race_day_id: raceDay.id,
+    // Carry the series and lap plan from the last race: the next one is
+    // almost always the same again.
+    series_id: previous?.series_id ?? null,
+    number: (previous?.number ?? 0) + 1,
+    name: String(name ?? "").trim() || null,
+    status: "setup",
+    sequence_start_at: null,
+    start_at: null,
+    fast_laps: previous?.fast_laps ?? 3,
+    slow_laps: previous?.slow_laps ?? 2,
+    published_at: null,
+  };
+  await db.localWrite("races", race);
+  return race;
+}
+
+/** Name or rename a race. Race-level data, so it syncs like any other row. */
+export async function setRaceName(race, name) {
+  const row = { ...race, name: String(name ?? "").trim() || null };
+  await db.localWrite("races", row);
+  return row;
 }
 
 export async function racesForDay(raceDayId) {

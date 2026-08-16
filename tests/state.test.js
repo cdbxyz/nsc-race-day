@@ -26,6 +26,8 @@ import {
   formatElapsed,
   formatSplits,
   raceClock,
+  raceLabel,
+  raceName,
 } from "../js/state.js";
 
 const RACE = { id: "r1", fast_laps: 3, slow_laps: 2, start_at: null };
@@ -660,4 +662,38 @@ test("an abandoned race is not an ended one", () => {
   assert.equal(state.abandoned, true);
   assert.equal(state.ended, false);
   assert.equal(state.canEnd, false, "an abandoned race has nothing to end");
+});
+
+/* ---------------------------------------------------------------------------
+ * Naming a race
+ *
+ * One label function, so the sequence header, results title, stand-down,
+ * resume banner, CSV and PDF cannot drift apart. A named trophy race is
+ * exactly the one whose results sheet gets kept.
+ * ------------------------------------------------------------------------ */
+
+test("a named race shows its name alongside the number", () => {
+  assert.equal(raceLabel({ number: 1, name: "Whittaker Cup" }), "Race 1 — Whittaker Cup");
+  assert.equal(raceLabel({ number: 3, name: "Commodore's Trophy" }), "Race 3 — Commodore's Trophy");
+});
+
+test("an unnamed race is just its number, with no stray dash", () => {
+  assert.equal(raceLabel({ number: 2, name: null }), "Race 2");
+  assert.equal(raceLabel({ number: 2 }), "Race 2");
+  assert.equal(raceLabel({ number: 2, name: "" }), "Race 2");
+});
+
+test("a name of only spaces counts as unnamed", () => {
+  assert.equal(raceLabel({ number: 2, name: "   " }), "Race 2");
+  assert.equal(raceName({ number: 2, name: "   " }), "");
+});
+
+test("a name is trimmed for display", () => {
+  assert.equal(raceLabel({ number: 1, name: "  Whittaker Cup  " }), "Race 1 — Whittaker Cup");
+  assert.equal(raceName({ number: 1, name: "  Whittaker Cup  " }), "Whittaker Cup");
+});
+
+test("a missing race does not produce a broken label", () => {
+  assert.equal(raceLabel(null), "Race ?");
+  assert.equal(raceName(null), "");
 });

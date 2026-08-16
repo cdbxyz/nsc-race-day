@@ -14,7 +14,7 @@ import { el, clear, panel, notice } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
-import { boatState, lapPlan } from "./../state.js";
+import { boatState, lapPlan, raceLabel } from "./../state.js";
 import { sync } from "./../sync.js";
 import { navigate } from "./../router.js";
 
@@ -77,6 +77,7 @@ async function tally(raceDay) {
         boat: boatById.get(entry.boat_id),
         helm: helmById.get(entry.helm_id),
         raceNumber: race.number,
+        raceLabel: raceLabel(race),
         entryId: entry.id,
         raceId: race.id,
         ...state,
@@ -156,7 +157,7 @@ function tallyPanel() {
       el(`div.regrow.tally-${row.status}`, {}, [
         el("div.regmain", {}, [
           el("div.regname", { text: row.boat?.name ?? "unknown boat" }),
-          el("div.regmeta", { text: `${row.helm?.name ?? ""} · Race ${row.raceNumber}` }),
+          el("div.regmeta", { text: [row.helm?.name, row.raceLabel].filter(Boolean).join(" · ") }),
         ]),
         el("span.tallymark", { text: row.status === "unaccounted" ? "UNACCOUNTED" : row.label }),
       ])

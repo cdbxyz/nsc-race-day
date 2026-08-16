@@ -142,6 +142,31 @@ export function marksCrossed(previousSeconds, currentSeconds) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Identifying a race
+ * ------------------------------------------------------------------------ */
+
+/**
+ * How a race is named on screen and in outputs.
+ *
+ *   named   "Race 2 — Whittaker Cup"
+ *   unnamed "Race 2"
+ *
+ * One function so the two forms can never drift apart between the sequence
+ * header, the results title, stand-down and the PDF — a named trophy race is
+ * exactly the one whose results sheet gets kept.
+ */
+export function raceLabel(race) {
+  const number = race?.number ?? "?";
+  const name = String(race?.name ?? "").trim();
+  return name ? `Race ${number} — ${name}` : `Race ${number}`;
+}
+
+/** Just the name, for places that already say which race it is. */
+export function raceName(race) {
+  return String(race?.name ?? "").trim();
+}
+
+/* ---------------------------------------------------------------------------
  * The lap plan
  * ------------------------------------------------------------------------ */
 
