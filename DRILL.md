@@ -33,7 +33,7 @@ Part B is the part that needs your hands.
 ## Running it
 
 ```
-npm test                 # 386 tests, all green before you start
+npm test                 # all green before you start — no point drilling a known-broken build
 python3 -m http.server 8000
 node tools/drill.mjs http://127.0.0.1:8000/
 ```
