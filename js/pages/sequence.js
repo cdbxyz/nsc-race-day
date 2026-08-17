@@ -22,7 +22,7 @@ import { wouldBeTestData } from "./../devmode.js";
 import * as device from "./../device.js";
 import { COMPASS, FORCES, windText } from "./../wind.js";
 import { PURSUIT_CALCULATOR_URL } from "./../calendar.js";
-import { keepAwake, allowSleep } from "./../wakelock.js";
+import { keepAwake, allowSleep, sleepWarning } from "./../wakelock.js";
 import { navigate } from "./../router.js";
 
 let host = null;
@@ -147,7 +147,9 @@ function render() {
           readOnlyBanner({
             byName: context.claim.byName,
             claimedAt: context.claim.claimedAt,
-            onTakeOver: async () => {
+            myName: context.claim.myName,
+            onTakeOver: async (name) => {
+              await device.setDeviceName(name);
               await device.claimRaceDay(context.raceDay);
               await reload();
             },
@@ -193,6 +195,8 @@ function armPanel(race, entries, sequence) {
     body.append(notice("Sequence postponed (AP). Start again when the fleet is ready.", "info"));
   }
   if (isFastClock()) body.append(testClockNotice());
+  const sleepNote = sleepWarning();
+  if (sleepNote) body.append(notice(sleepNote, "info"));
   if (race.is_pursuit) body.append(pursuitNotice());
   body.append(
     el("div.regname", { text: `${raceLabel(race)} · ${entries.length} boats signed on` }),

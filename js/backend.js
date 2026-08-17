@@ -38,9 +38,14 @@ export function createSupabaseBackend({ upsert, remove, isSignedIn }) {
 
     async push(batch) {
       if (!isSignedIn()) {
-        // Not signed in yet. Throwing keeps the batch queued rather than
-        // dropping it — the PIN prompt is a UI problem, not a data problem.
-        throw new Error("not signed in");
+        /* Not signed in — either never, or the session expired mid-day.
+           Throwing keeps the batch queued rather than dropping it: the PIN
+           prompt is a UI problem, not a data problem, and every tap is
+           already safe on the phone. The flag lets the app ASK for the PIN
+           instead of quietly retrying forever behind a spinner. */
+        const err = new Error("not signed in");
+        err.needsAuth = true;
+        throw err;
       }
 
       // Deletes are rare (a boat signed on by mistake) and reorder badly

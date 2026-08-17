@@ -162,8 +162,9 @@ test("the banner has no dismiss control", async () => {
   assert.match(element, /role="alert"/);
 
   const app = await readFile(new URL("../js/app.js", import.meta.url), "utf8");
+  // Just this one function: other shell bars legitimately wire up buttons.
   const start = app.indexOf("function wireTestModeBanner");
-  const wiring = app.slice(start, app.indexOf("\nasync function boot()", start));
+  const wiring = app.slice(start, app.indexOf("\n}", app.indexOf("paint(activeModes())")));
   assert.ok(wiring.length > 100, "found the function body");
   assert.ok(!/dismiss|addEventListener/.test(wiring), "and nothing wires one up");
 });

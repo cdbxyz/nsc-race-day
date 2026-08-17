@@ -12,7 +12,9 @@
 <!-- All paths are relative: GitHub Pages serves this from /nsc-race-day/. -->
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<!-- iOS ignores SVG for the home-screen icon, so this must be a real PNG.
+     Rendered from icon.svg (npm run icons) so the two cannot drift. -->
+<link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -39,6 +41,16 @@
 
   <!-- Device clock vs the club database. Advisory, never blocking. -->
   <div class="clockbar-warn" id="clock-bar" hidden role="alert"></div>
+
+  <!-- Storage full. The loudest thing in the app, because a write that did
+       not land looks exactly like one that did. -->
+  <div class="storagebar" id="storage-bar" hidden role="alert" aria-live="assertive"></div>
+
+  <!-- The session expired mid-day. Nothing is lost; somebody has to type the PIN. -->
+  <div class="authbar" id="auth-bar" hidden role="status">
+    <span class="authbar-text"></span>
+    <button class="authbar-action" type="button" id="auth-signin">Enter club PIN</button>
+  </div>
 
   <div class="updatebar" id="update-bar" hidden role="status">
     <span class="updatebar-text">Update available</span>
@@ -150,6 +162,23 @@
           </select>
         </div>
         <p class="stub" id="dev-speed-note" style="padding:8px 0 0"></p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">This device</span></div>
+      <div class="panel-body">
+        <div class="field">
+          <label for="dev-device-name">Phone name</label>
+          <input id="dev-device-name" class="text" type="text" autocomplete="off">
+        </div>
+        <p class="stub">
+          What another phone sees if it has to take a race day over from this
+          one. "Chris's iPhone" is a decision somebody can make; a random id
+          is not.
+        </p>
+        <div class="actions"><button class="btn ghost" type="button" id="dev-device-save">Save name</button></div>
+        <pre class="devlog" id="dev-device-id"></pre>
       </div>
     </div>
 

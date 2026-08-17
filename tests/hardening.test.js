@@ -58,12 +58,46 @@ test("the device id lives with the race data, not beside it", async () => {
   assert.ok(await db.getMeta("device_id"), "stored in meta");
 });
 
-test("a device has a readable name for the takeover prompt", async () => {
+test("an unnamed device falls back to a kind, never to an id", async () => {
+  /* The banner's whole job is to let an OOD recognise which phone is holding
+     the day. "iPhone" is a poor label; "Device 74b9eb" is a useless one. */
   const fallback = await device.deviceName();
-  assert.match(fallback, /^Device /, "an id is better than nothing");
+  assert.equal(fallback, device.defaultDeviceName());
+  assert.ok(!/^Device [0-9a-f]{6}$/.test(fallback), "never a raw id");
+  assert.equal(await device.isNamed(), false);
 
   await device.setDeviceName("Chris's iPhone");
   assert.equal(await device.deviceName(), "Chris's iPhone");
+  assert.equal(await device.isNamed(), true);
+});
+
+test("the suggested name is built from the OOD's own name", () => {
+  // They type it at setup anyway, so the useful half is already on screen.
+  const kind = device.defaultDeviceName();
+  assert.equal(device.suggestDeviceName("Chris"), `Chris's ${kind}`);
+  assert.equal(device.suggestDeviceName("Gareth"), `Gareth's ${kind}`);
+  assert.equal(device.suggestDeviceName("Rhys"), `Rhys's ${kind}`, "'s even after an s");
+  assert.equal(device.suggestDeviceName("  "), kind, "no owner, no possessive");
+});
+
+test("a name can be cleared back to the default", async () => {
+  await device.setDeviceName("Chris's iPhone");
+  await device.setDeviceName("   ");
+  assert.equal(await device.isNamed(), false);
+  assert.equal(await device.deviceName(), device.defaultDeviceName());
+});
+
+test("the claim carries the name, so the other phone can read it", async () => {
+  await device.setDeviceName("Chris's iPhone");
+  const claimed = await device.claimRaceDay({ id: "d1", claimed_by: null });
+  assert.equal(claimed.claimed_by_name, "Chris's iPhone");
+});
+
+test("the takeover prompt is given this phone's name to prefill", async () => {
+  await device.setDeviceName("Chris's iPhone");
+  const claim = await device.claimState({ id: "d1", claimed_by: "other", claimed_by_name: "Gareth's iPhone" });
+  assert.equal(claim.byName, "Gareth's iPhone", "who holds it");
+  assert.equal(claim.myName, "Chris's iPhone", "and who is asking");
 });
 
 /* ---- the soft lock ------------------------------------------------------ */

@@ -10,6 +10,8 @@
  * written at all — never half.
  */
 
+import { isQuotaError, noteQuotaError, clearQuotaError } from "./storage.js";
+
 const DB_NAME = "nsc-race-day";
 const DB_VERSION = 2;
 
@@ -177,7 +179,16 @@ export async function localWrite(table, row) {
   });
   if (_hooks.beforeCommit) _hooks.beforeCommit(tx);
 
-  await done;
+  /* A write that fails for want of disk space is the worst failure in this
+     app: the page has already moved on, the tap looked like it worked, and
+     the event simply is not there. It must never be swallowed. */
+  try {
+    await done;
+  } catch (err) {
+    if (isQuotaError(err)) noteQuotaError(err);
+    throw err;
+  }
+  clearQuotaError();
   notifyWrite();
   return row;
 }

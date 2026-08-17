@@ -10,7 +10,7 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "4b7e2f07268a";
+const VERSION = "c388dc76f1dd";
 const SHELL = [
   "./",
   "./css/app.css",
@@ -24,6 +24,14 @@ const SHELL = [
   "./fonts/barlow-condensed-600.woff2",
   "./fonts/barlow-condensed-700.woff2",
   "./icon.svg",
+  "./img/apple-touch-icon.png",
+  "./img/flags/ap.svg",
+  "./img/flags/class.svg",
+  "./img/flags/p.svg",
+  "./img/flags/start.svg",
+  "./img/icon-192.png",
+  "./img/icon-512.png",
+  "./img/nsc-logo.svg",
   "./index.html",
   "./js/app.js",
   "./js/backend.js",
@@ -53,6 +61,7 @@ const SHELL = [
   "./js/router.js",
   "./js/scoring.js",
   "./js/state.js",
+  "./js/storage.js",
   "./js/supabase.js",
   "./js/sync.js",
   "./js/ui.js",

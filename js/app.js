@@ -11,6 +11,7 @@ import * as api from "./supabase.js";
 import { supabaseBackend, pullReferenceData } from "./backend.js";
 import { activeModes, onModeChange } from "./devmode.js";
 import { clockWarning, onClockChange } from "./clockcheck.js";
+import { requestPersistence, storageWarning, onStorageChange } from "./storage.js";
 import { createPinPrompt } from "./pin.js";
 import { createRouter } from "./router.js";
 import { findResumePoint, renderResumeBanner } from "./resume.js";
@@ -84,6 +85,45 @@ function wireClockWarning(node) {
   paint(clockWarning());
 }
 
+function wireStorageWarning(node) {
+  if (!node) return;
+  const paint = () => {
+    const warning = storageWarning();
+    node.textContent = warning ?? "";
+    node.hidden = !warning;
+  };
+  onStorageChange(paint);
+  paint();
+}
+
+/**
+ * The mid-day sign-out bar.
+ *
+ * A PIN session can expire in the middle of a race day. Nothing is lost when
+ * it does — every tap is already committed locally and the outbox holds its
+ * place in order — but without this the only symptom is a sync pill that
+ * quietly retries forever, and the day's records never arrive.
+ *
+ * So it asks, in one line, with the button that fixes it. Re-entering the PIN
+ * does not touch a single stored row: the outbox simply drains on the next
+ * flush, in the same order it was tapped.
+ */
+function wireAuthBar(node) {
+  if (!node) return;
+  const text = node.querySelector(".authbar-text");
+  node.querySelector("#auth-signin").addEventListener("click", () => promptForPin());
+
+  sync.subscribe((status) => {
+    const show = Boolean(status.needsAuth) && status.pending > 0;
+    node.hidden = !show;
+    if (show) {
+      text.textContent =
+        `${status.pending} record${status.pending === 1 ? "" : "s"} waiting — this phone is signed out. ` +
+        "Nothing is lost; they will go up as soon as you sign in.";
+    }
+  });
+}
+
 async function boot() {
   await db.openDB();
 
@@ -109,6 +149,12 @@ async function boot() {
   updatePrompt = createUpdatePrompt(document.getElementById("update-bar"));
   wireTestModeBanner(document.getElementById("testmode-bar"));
   wireClockWarning(document.getElementById("clock-bar"));
+  wireStorageWarning(document.getElementById("storage-bar"));
+  wireAuthBar(document.getElementById("auth-bar"));
+  /* Ask on every boot, not once: the answer changes the moment the app is
+     installed to the home screen, and asking again costs nothing. Not
+     awaited — a race day must not wait on a permission. */
+  requestPersistence();
 
   const routes = {};
   for (const [name, page] of Object.entries(PAGES)) {

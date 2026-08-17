@@ -25,7 +25,10 @@ const SW_PATH = path.join(ROOT, "sw.js");
 /* Everything the app needs to open with no signal. Directories are walked, so
    adding a page module or a font is picked up without touching anything. */
 const ROOT_FILES = ["index.html", "manifest.json", "icon.svg"];
-const DIRECTORIES = ["css", "js", "fonts"];
+/* img/ matters as much as fonts/: the mast logo and the four start-sequence
+   flags are chrome an OOD reads at a glance, and a broken image on a beach
+   with no signal looks like a broken app. */
+const DIRECTORIES = ["css", "js", "fonts", "img"];
 
 const BEGIN = "/* BEGIN GENERATED — npm run stamp */";
 const END = "/* END GENERATED */";

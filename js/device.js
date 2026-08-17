@@ -47,12 +47,58 @@ export async function deviceId() {
   return id;
 }
 
-/** A human label for the takeover prompt: "Chris's iPhone", or the short id. */
+/**
+ * What kind of phone this is, from the user agent.
+ *
+ * Only ever a DEFAULT, and a weak one: it narrows "which phone claimed the
+ * day" from nothing to "an iPhone", which is worth having when three people
+ * are standing on a beach, but it does not identify anybody. The name the
+ * OOD types is what actually answers the question, and this is what sits in
+ * the box until they do.
+ */
+export function defaultDeviceName() {
+  const ua = globalThis.navigator?.userAgent ?? "";
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Android/i.test(ua)) return "Android phone";
+  if (/Macintosh|Mac OS X/i.test(ua)) return "Mac";
+  if (/Windows/i.test(ua)) return "Windows PC";
+  return "This phone";
+}
+
+/**
+ * Suggested name for a device its owner has not named: "Chris's iPhone".
+ *
+ * The OOD types their own name at setup anyway, so the useful half of the
+ * label is already on screen — taking it costs the OOD nothing and turns
+ * "Device 74b9eb claimed it" into a sentence somebody can act on.
+ */
+export function suggestDeviceName(ownerName) {
+  const owner = String(ownerName ?? "").trim();
+  const kind = defaultDeviceName();
+  if (!owner) return kind;
+  /* Always 's, even after an s. Modern British usage takes "Chris's" and
+     "Rhys's"; the bare apostrophe belongs to plurals, and a rule that tried
+     to tell those apart from personal names would get Welsh names wrong more
+     often than it got them right. */
+  return `${owner}'s ${kind}`;
+}
+
+/**
+ * This device's name, as the OTHER phone will see it in the takeover banner.
+ *
+ * Falls back to the device kind rather than the id: "iPhone" is a poor label
+ * but "Device 74b9eb" is a useless one, and the banner's whole job is to let
+ * an OOD recognise which phone is holding the day.
+ */
 export async function deviceName() {
   const name = await db.getMeta(DEVICE_NAME_KEY);
-  if (name) return name;
-  const id = await deviceId();
-  return `Device ${id.slice(0, 6)}`;
+  return name || defaultDeviceName();
+}
+
+/** True once someone has actually named this phone, rather than defaulted. */
+export async function isNamed() {
+  return Boolean(await db.getMeta(DEVICE_NAME_KEY));
 }
 
 export async function setDeviceName(name) {
@@ -82,13 +128,19 @@ export async function claimState(raceDay) {
   const claimedAt = raceDay?.claimed_at ?? null;
   const byName = raceDay?.claimed_by_name ?? null;
 
+  // What this phone would call itself, for the takeover prompt's name box.
+  const myName = await deviceName();
+
   if (!claimedBy) {
-    return { state: "unclaimed", canRecord: true, claimedBy: null, claimedAt: null, byName: null };
+    return {
+      state: "unclaimed", canRecord: true,
+      claimedBy: null, claimedAt: null, byName: null, myName,
+    };
   }
   if (claimedBy === me) {
-    return { state: "owner", canRecord: true, claimedBy, claimedAt, byName };
+    return { state: "owner", canRecord: true, claimedBy, claimedAt, byName, myName };
   }
-  return { state: "observer", canRecord: false, claimedBy, claimedAt, byName };
+  return { state: "observer", canRecord: false, claimedBy, claimedAt, byName, myName };
 }
 
 /**

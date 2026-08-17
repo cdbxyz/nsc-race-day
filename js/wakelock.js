@@ -63,3 +63,28 @@ export async function allowSleep() {
 export function isHeld() {
   return Boolean(sentinel);
 }
+
+/** Whether this browser can keep the screen on at all. */
+export function isSupported() {
+  return supported();
+}
+
+/**
+ * What to tell the OOD when the screen will not stay on.
+ *
+ * There is no honest software fallback — the no-sleep video trick burns
+ * battery on the one device that cannot spare it, and battery is the thing
+ * that actually ends race days. So the fallback is a sentence and a
+ * reassurance: the phone sleeping costs nothing, because every timer is
+ * computed from stored timestamps rather than accumulated.
+ *
+ * Returns null when the screen is being held, or when we can hold it.
+ */
+export function sleepWarning() {
+  if (supported()) return null;
+  return (
+    "This browser will not keep the screen awake, so the phone may sleep. " +
+    "Nothing is lost if it does — the clock is worked out from the recorded times, " +
+    "not counted up — but set Auto-Lock to Never in Settings before the gun."
+  );
+}

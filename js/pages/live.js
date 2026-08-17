@@ -178,7 +178,9 @@ function render() {
       readOnlyBanner({
         byName: context.claim.byName,
         claimedAt: context.claim.claimedAt,
-        onTakeOver: async () => {
+        myName: context.claim.myName,
+        onTakeOver: async (name) => {
+          await device.setDeviceName(name);
           await device.claimRaceDay(context.raceDay);
           await reload();
         },

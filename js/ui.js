@@ -397,11 +397,22 @@ export function openPicker({ title, items, onPick, onAddNew = null, addLabel = "
  *
  * @param {{byName: string|null, claimedAt: string|null, onTakeOver: Function}} args
  */
-export function readOnlyBanner({ byName, claimedAt, onTakeOver }) {
+export function readOnlyBanner({ byName, claimedAt, myName = "", onTakeOver }) {
   const who = byName ? `“${byName}”` : "another phone";
   const since = claimedAt
     ? ` since ${new Date(claimedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
     : "";
+
+  /* Naming THIS phone before taking over, because the moment the takeover
+     lands the other phone gets this same banner — and it is no use to them
+     if it says "Device 74b9eb took the day". One glance, prefilled, and it
+     does not block the tap. */
+  const name = field("Name this phone", {
+    class: "text",
+    autocomplete: "off",
+    value: myName,
+    placeholder: "e.g. Chris's iPhone",
+  });
 
   const wrap = el("div.readonlybar");
   wrap.append(
@@ -411,11 +422,12 @@ export function readOnlyBanner({ byName, claimedAt, onTakeOver }) {
         text: `${who} claimed it${since}. You can see everything; nothing you tap here would be recorded, so recording is switched off to stop the race being logged twice.`,
       }),
     ]),
+    name.node,
     armedButton("device.takeover", {
       label: "Take over on this device",
       armedLabel: "TAP AGAIN TO TAKE OVER",
       classes: "danger",
-      onConfirm: onTakeOver,
+      onConfirm: () => onTakeOver(name.input.value),
     }),
     el("p.readonlybar-detail", {
       text: "The other phone keeps everything it has recorded and keeps sending it to the club database. It simply stops being able to record anything new.",

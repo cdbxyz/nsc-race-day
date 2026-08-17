@@ -57,7 +57,13 @@ export function createSync({
 } = {}) {
   let backend = initialBackend;
   const listeners = new Set();
-  let status = { state: "synced", pending: 0, blocked: 0, lastSyncedAt: null, lastError: null };
+  let status = {
+    state: "synced", pending: 0, blocked: 0,
+    lastSyncedAt: null, lastError: null,
+    // True when the only thing standing between the outbox and the club
+    // database is a PIN. Nothing is lost; somebody just has to type it.
+    needsAuth: false,
+  };
   let inFlight = false;
   let consecutiveFailures = 0;
   let lastDelay = 0;
@@ -71,7 +77,8 @@ export function createSync({
       merged.pending === status.pending &&
       merged.blocked === status.blocked &&
       merged.lastSyncedAt === status.lastSyncedAt &&
-      merged.lastError === status.lastError;
+      merged.lastError === status.lastError &&
+      merged.needsAuth === status.needsAuth;
     status = merged;
     if (unchanged) return;
     for (const fn of listeners) {
@@ -135,7 +142,7 @@ export function createSync({
             clearTimer(timer);
             timer = null;
           }
-          await refreshStatus({ lastError: null });
+          await refreshStatus({ lastError: null, needsAuth: false });
           break;
         }
         try {
@@ -156,7 +163,7 @@ export function createSync({
 
           consecutiveFailures += 1;
           await db.markOutboxAttempt(batch.map((e) => e.seq), err);
-          await refreshStatus({ lastError: message });
+          await refreshStatus({ lastError: message, needsAuth: Boolean(err?.needsAuth) });
           scheduleRetry();
           break;
         }
@@ -164,7 +171,7 @@ export function createSync({
         await db.clearOutbox(batch.map((e) => e.seq));
         consecutiveFailures = 0;
         await db.recordServerContact();
-        await refreshStatus({ lastError: null });
+        await refreshStatus({ lastError: null, needsAuth: false });
       }
     } finally {
       inFlight = false;

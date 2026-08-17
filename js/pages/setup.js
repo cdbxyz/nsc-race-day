@@ -12,6 +12,7 @@ import {
 import { raceLabel } from "./../state.js";
 import * as cal from "./../calendar.js";
 import * as rd from "./../raceday.js";
+import * as device from "./../device.js";
 import { navigate } from "./../router.js";
 
 let host = null;
@@ -58,6 +59,25 @@ async function render() {
   const ro2 = field("Rescue Officer 2 (RO2)", {
     class: "text", list: suggestionsId, autocomplete: "off", placeholder: "Rescue boat crew",
   });
+  /* Which phone this is, as the OTHER phone will see it if it ever has to
+     take the day over. Auto-suggested from the OOD's name — they have just
+     typed it, so the useful half of the label is already on screen — but
+     always editable, because a club phone is not anybody's phone. */
+  const phone = field("This phone", {
+    class: "text",
+    autocomplete: "off",
+    placeholder: device.defaultDeviceName(),
+  });
+  device.deviceName().then(async (existing) => {
+    if (await device.isNamed()) phone.input.value = existing;
+  });
+  let phoneEdited = false;
+  phone.input.addEventListener("input", () => { phoneEdited = true; });
+  ood.input.addEventListener("input", async () => {
+    if (phoneEdited || (await device.isNamed())) return;
+    phone.input.value = device.suggestDeviceName(ood.input.value);
+  });
+
   // One race by default: most days are one, and adding another is a tap.
   const races = field("Races planned", { type: "number", min: 1, max: 10, value: 1, inputMode: "numeric" });
   /* The race name comes off the season programme rather than out of someone's
@@ -180,6 +200,8 @@ async function render() {
           });
           seriesId = created.id;
         }
+        // Named before the day is created, so the claim carries the name.
+        await device.setDeviceName(phone.input.value);
         await rd.createRaceDay({
           date: date.input.value,
           oodName: ood.input.value,
@@ -209,6 +231,7 @@ async function render() {
     newSeriesBlock,
     races.node,
     namePicker.node,
+    phone.node,
     pursuitNote
   );
 
