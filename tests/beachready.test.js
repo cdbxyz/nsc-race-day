@@ -219,3 +219,72 @@ test("the safe area is actually used, not merely declared", async () => {
     "top for the mast, bottom for anything fixed"
   );
 });
+
+/* ---- readable in July sun -----------------------------------------------
+ *
+ * WCAG AA (4.5:1) is a floor, not a target. --slate #5F6E8C is 5.1:1 on
+ * white: legal, and washed out on a phone held at arm's length in direct
+ * sunlight. Anything an OOD READS TO ACT ON mid-race must be well above it.
+ *
+ * These pin the palette and the rule, so a later tidy-up cannot quietly put
+ * the grey back on the lap counter.
+ */
+
+/** WCAG relative-luminance contrast ratio between two hex colours. */
+function contrastRatio(a, b) {
+  const lum = (hex) => {
+    const [r, g, b2] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const f = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b2);
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+test("the palette is what we think it is", () => {
+  assert.ok(Math.abs(contrastRatio("#5F6E8C", "#FFFFFF") - 5.13) < 0.05, "--slate");
+  assert.ok(Math.abs(contrastRatio("#1B3B76", "#FFFFFF") - 10.86) < 0.05, "--hull");
+  assert.ok(Math.abs(contrastRatio("#0A1B3D", "#FFFFFF") - 16.98) < 0.05, "--ink");
+});
+
+test("mid-race text an OOD acts on is never the hint grey", async () => {
+  const css = await readFile(new URL("../css/app.css", import.meta.url), "utf8");
+
+  /* .boatmeta is "Lap 2 of 3" on the live card — read while a boat crosses.
+     .railtime and .railsplits are the finished rail. .cmeta and .celap are
+     the results sheet's own numbers. */
+  for (const selector of [".boatmeta", ".railtime", ".railsplits", ".raillabel", ".cmeta", ".celap"]) {
+    const start = css.indexOf(`\n${selector}{`);
+    assert.ok(start > 0, `${selector} not found`);
+    const rule = css.slice(start, css.indexOf("}", start));
+    assert.ok(
+      !rule.includes("var(--slate)"),
+      `${selector} must not use --slate: 5.1:1 is legal and unreadable in sun`
+    );
+  }
+});
+
+test("no critical text is smaller than 10px", async () => {
+  const css = await readFile(new URL("../css/app.css", import.meta.url), "utf8");
+  for (const selector of [".boatmeta", ".railtime", ".railsplits", ".cmeta", ".celap"]) {
+    const start = css.indexOf(`\n${selector}{`);
+    const rule = css.slice(start, css.indexOf("}", start));
+    const size = rule.match(/font-size:\s*([\d.]+)rem/)?.[1];
+    if (size) {
+      assert.ok(Number(size) * 16 >= 10, `${selector} at ${Number(size) * 16}px is too small to read wet`);
+    }
+  }
+});
+
+test("every tap target clears 44px in both directions", async () => {
+  /* Height alone is not enough: the footer nav links were 44px tall and 35px
+     wide, and "Correct" on the results sheet was 38px tall. */
+  const css = await readFile(new URL("../css/app.css", import.meta.url), "utf8");
+
+  const footRule = css.slice(css.indexOf("\n.foot a{"), css.indexOf("}", css.indexOf("\n.foot a{")));
+  assert.match(footRule, /min-height:44px/);
+  assert.match(footRule, /min-width:44px/);
+
+  const correct = css.slice(css.indexOf("\n.correctbtn{"), css.indexOf("}", css.indexOf("\n.correctbtn{")));
+  assert.match(correct, /min-height:44px/);
+});

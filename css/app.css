@@ -243,10 +243,10 @@ button.btn[disabled]{opacity:.45;cursor:default}
 .card.lead .cpos{color:var(--flag)}
 .cwho{grid-area:who;min-width:0}
 .cboat{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cmeta{font-family:var(--mono);font-size:.68rem;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmeta{font-family:var(--mono);font-size:.7rem;color:var(--hull);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ctime{grid-area:time;text-align:right}
 .ccorr{font-family:var(--mono);font-weight:600;font-size:1rem}
-.celap{font-family:var(--mono);font-size:.68rem;color:var(--slate)}
+.celap{font-family:var(--mono);font-size:.7rem;color:var(--hull)}
 .cgap{grid-area:gap;margin-top:2px}
 .card.out{opacity:.62}
 .card.out .cpos{font-size:1.2rem;color:var(--slate)}
@@ -408,7 +408,7 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 .undoall[disabled]{opacity:.35}
 
 .railwrap{margin-top:10px}
-.raillabel{font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;font-size:.7rem;font-weight:600;color:var(--slate);margin-bottom:5px}
+.raillabel{font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;font-size:.7rem;font-weight:600;color:var(--hull);margin-bottom:5px}
 .rail{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
 .railcard{
   flex:none;display:flex;flex-direction:column;gap:1px;align-items:flex-start;
@@ -419,7 +419,7 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 .railcard.coded{border-left-color:var(--slate);opacity:.75}
 .railcard.coded .railpos{color:var(--slate);font-size:.85rem;letter-spacing:.06em}
 .railboat{font-size:.78rem;font-weight:600;white-space:nowrap}
-.railtime{font-family:var(--mono);font-size:.68rem;color:var(--slate);font-variant-numeric:tabular-nums}
+.railtime{font-family:var(--mono);font-size:.7rem;color:var(--hull);font-variant-numeric:tabular-nums}
 
 /* Sized so about eight fit a 390px screen without scrolling. */
 .boatgrid{display:flex;flex-direction:column;gap:5px;margin-top:10px}
@@ -435,8 +435,12 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   font-family:var(--disp);font-size:1.2rem;font-weight:600;text-transform:uppercase;
   line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+/* Race-critical, so NOT slate. "Lap 2 of 3" is read at a glance, at arm's
+   length, on a screen in July sun, while a boat is crossing the line —
+   --slate is 5.1:1 and legal, --hull is 10.9:1 and readable. Anything an OOD
+   acts on mid-race uses --hull or --ink, never the grey used for hints. */
 .boatmeta{
-  font-family:var(--mono);font-size:.68rem;color:var(--slate);
+  font-family:var(--mono);font-size:.72rem;color:var(--hull);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;
 }
 .lapbtn{
@@ -507,7 +511,10 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 .foot a{
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;
   font-size:.72rem;font-weight:600;color:var(--slate);text-decoration:none;
-  padding:8px 8px;min-height:44px;display:flex;align-items:center;
+  /* 44px in BOTH directions. These were tall enough and too narrow: "Dev"
+     is a short word and came out 35px wide. */
+  padding:8px 8px;min-height:44px;min-width:44px;
+  display:flex;align-items:center;justify-content:center;
 }
 .foot a:active{color:var(--flag)}
 .foot a:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
@@ -516,7 +523,9 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 
 /* ---- results and stand-down ---- */
 .card{position:relative}
-.correctbtn{min-width:0;padding:0 10px;min-height:38px;font-size:.68rem;grid-column:1 / -1;justify-self:end}
+/* Correcting a time is a fiddly, deliberate action taken with wet hands on
+   a bright screen — the last place to shave six pixels off the target. */
+.correctbtn{min-width:64px;padding:0 12px;min-height:44px;font-size:.68rem;grid-column:1 / -1;justify-self:end}
 .correctedmark{
   display:inline-block;font-family:var(--disp);text-transform:uppercase;
   letter-spacing:.1em;font-size:.62rem;font-weight:600;color:var(--flag);
@@ -539,7 +548,7 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   font-variant-numeric:tabular-nums;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;
 }
-.railsplits{color:var(--slate);font-size:.62rem}
+.railsplits{color:var(--hull);font-size:.64rem}
 
 /* ---- ending a race ---- */
 .endbar{margin-top:12px}
@@ -730,4 +739,6 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 
 /* ---- the OOD guide, linked from home ---- */
 .guideline{margin:14px 2px 0;font-size:.8rem;line-height:1.45}
+/* An inline link is still a tap target. */
+.guideline .linkish{display:inline-flex;align-items:center;min-height:44px}
 .guidenote{color:var(--slate)}

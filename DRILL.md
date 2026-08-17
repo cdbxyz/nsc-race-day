@@ -196,6 +196,15 @@ things that fail in sun.
 
 ### B4 — The screen, outdoors
 
+> **What was checked here already:** every text node on all nine pages passes
+> WCAG AA contrast, and everything an OOD reads to act on mid-race — the lap
+> counter, the finished rail, the results columns — was moved off the hint
+> grey (`--slate`, 5.1:1) onto `--hull` at 10.9:1. Every tap target clears
+> 44px in both directions. **None of that proves it is readable in sun**,
+> which is a property of the screen, the brightness, and the angle of the sky.
+> That is what this step is for.
+
+
 - [ ] Screen at **full brightness**, in direct sun
 - [ ] The race clock is readable at arm's length
 - [ ] Boat names and lap buttons are readable **without shading the screen**

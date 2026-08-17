@@ -108,6 +108,12 @@ Hard rules:
   the shell when the device is more than 90s out. Advisory only: it never
   rewrites a stored timestamp and never blocks a write. A known offset is
   recoverable; an unknown one is not.
+- **Anything read to ACT ON mid-race uses `--hull` or `--ink`, never
+  `--slate`.** The hint grey is 5.1:1 — legal under WCAG AA and washed out on
+  a phone at arm's length in July sun. `--hull` is 10.9:1. AA is the floor
+  here, not the target, and critical text stays at 10px or larger. Every tap
+  target clears 44px in BOTH directions: the footer links were 44 tall and 35
+  wide, which counts as a failure.
 - **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
   8-point compass direction it blows FROM. Beaufort because it is what an
   OOD can judge by eye from the beach without an anemometer, and what the
