@@ -41,7 +41,7 @@ async function render() {
 
   const node = el("div");
   node.append(resume ? inProgressHero(resume) : todayHero(scheduled));
-  node.append(tiles());
+  node.append(tiles(), guideLink());
   clear(host).append(node);
 }
 
@@ -89,6 +89,24 @@ const TILES = [
   ["standdown", "Stand-down", "Tally check and closing the day"],
   ["dev", "Dev tools", "Sync, fast clock, wiping this phone"],
 ];
+
+/* The OOD guide lives in the repo as Markdown so it stays one document
+   rather than drifting into a second copy inside the app. That means it
+   needs signal, which is fine for something read at home the night before —
+   and the link says so, rather than dying silently on the beach. */
+export const GUIDE_URL = "https://github.com/cdbxyz/nsc-race-day/blob/main/GUIDE.md";
+
+function guideLink() {
+  return el("p.guideline", {}, [
+    el("a.linkish", {
+      href: GUIDE_URL,
+      target: "_blank",
+      rel: "noopener",
+      text: "First time as OOD? Read the guide",
+    }),
+    el("span.guidenote", { text: " — needs signal, so read it before you set off." }),
+  ]);
+}
 
 function tiles() {
   const grid = el("div.hometiles");

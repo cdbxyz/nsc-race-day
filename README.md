@@ -6,6 +6,15 @@ PWA that runs a whole race day from a phone on a beach with no signal.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for scope, schema and behaviour, and
 [CLAUDE.md](CLAUDE.md) for the rules any change has to respect.
 
+## Documentation
+
+| Document | For whom |
+|---|---|
+| [GUIDE.md](GUIDE.md) | The Officer of the Day. Plain language, no jargon — read it before your first duty. |
+| [DRILL.md](DRILL.md) | Whoever maintains the app. The pre-season offline drill, automated and physical-device halves. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Anyone changing the code. Scope, schema and the decisions behind them. |
+| [CLAUDE.md](CLAUDE.md) | The project's hard rules. Read before any work. |
+
 ## Running it
 
 There is no build step. Serve the repo root over HTTP (a service worker needs

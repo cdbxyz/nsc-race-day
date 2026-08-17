@@ -727,3 +727,7 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;
   border-radius:2px;cursor:pointer;
 }
+
+/* ---- the OOD guide, linked from home ---- */
+.guideline{margin:14px 2px 0;font-size:.8rem;line-height:1.45}
+.guidenote{color:var(--slate)}
