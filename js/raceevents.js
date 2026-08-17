@@ -93,7 +93,10 @@ export const undoEvent = (raceId, eventId) =>
 /** Move the race on. The status is a projection of the log, kept on the row
     so other screens and Supabase can read it without replaying events. */
 export async function setRaceStatus(race, status, extra = {}) {
-  const row = { ...race, status, ...extra };
+  // As setRaceStatusIfEarlier: merge onto the stored row, never onto a copy
+  // the caller has been holding since its last render.
+  const current = (await db.get("races", race.id)) ?? race;
+  const row = { ...current, status, ...extra };
   await db.localWrite("races", row);
   return row;
 }

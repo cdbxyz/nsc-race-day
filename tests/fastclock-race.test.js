@@ -12,6 +12,7 @@
  * simulates the fix — wallClockAt() is the same function sequence.js uses.
  */
 
+import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -462,4 +463,66 @@ test("a compressed sequence passes only when it is allowed", () => {
     null,
     "a day already branded test data does"
   );
+});
+
+/* ---- a stale race row must never clobber a fresh write -------------------
+ *
+ * Found by the offline drill: the wind captured on the start-sequence page
+ * disappeared the moment the gun was armed. armPanel() holds the race object
+ * from its last render; the wind picker wrote to the stored row; then Start
+ * spread the stale copy back over it and reverted the wind to null.
+ *
+ * These drive the real raceday functions, so the guarantee is the shipped one.
+ */
+
+test("setRaceStatusIfEarlier merges onto the stored row, not the caller's", async () => {
+  const dbm = await import("../js/db.js");
+  const rd = await import("../js/raceday.js");
+  await dbm.clearAll();
+
+  const { raceDay } = await rd.createRaceDay({ date: "2026-08-16", oodName: "Chris" });
+  const [race] = await rd.racesForDay(raceDay.id);
+
+  // The page captured `race` here. Meanwhile the wind is recorded.
+  const stale = { ...race };
+  await rd.setRaceWind(race, { direction: "SW", force: 4 });
+
+  // Now the Start button fires, holding the stale copy.
+  await rd.setRaceStatusIfEarlier(stale, "sequence");
+
+  const stored = await dbm.get("races", race.id);
+  assert.equal(stored.status, "sequence", "the status still moved");
+  assert.equal(stored.wind_direction, "SW", "and the wind survived");
+  assert.equal(stored.wind_force, 4);
+});
+
+test("the returned row is the merged one, so a page can keep using it", async () => {
+  const dbm = await import("../js/db.js");
+  const rd = await import("../js/raceday.js");
+  await dbm.clearAll();
+
+  const { raceDay } = await rd.createRaceDay({ date: "2026-08-16", oodName: "Chris" });
+  const [race] = await rd.racesForDay(raceDay.id);
+  await rd.setRaceWind(race, { direction: "N", force: 2 });
+
+  const returned = await rd.setRaceStatusIfEarlier({ ...race }, "racing", {
+    start_at: new Date().toISOString(),
+  });
+  assert.equal(returned.wind_direction, "N");
+  assert.ok(returned.start_at);
+});
+
+test("a race already past that status is left alone, freshly read", async () => {
+  const dbm = await import("../js/db.js");
+  const rd = await import("../js/raceday.js");
+  await dbm.clearAll();
+
+  const { raceDay } = await rd.createRaceDay({ date: "2026-08-16", oodName: "Chris" });
+  const [race] = await rd.racesForDay(raceDay.id);
+  await rd.setRaceStatusIfEarlier(race, "racing");
+
+  // A stale copy still saying "setup" must not drag the race backwards.
+  const returned = await rd.setRaceStatusIfEarlier({ ...race, status: "setup" }, "sequence");
+  assert.equal(returned.status, "racing", "the stored row wins");
+  assert.equal((await dbm.get("races", race.id)).status, "racing");
 });

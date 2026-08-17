@@ -228,8 +228,15 @@ const PROGRESS = {
 
 /** Advance a race's status, never rewind it. */
 export async function setRaceStatusIfEarlier(race, status, extra = {}) {
-  if ((PROGRESS[race.status] ?? 0) >= (PROGRESS[status] ?? 0)) return race;
-  const row = { ...race, status, ...extra };
+  /* Merge onto the row as it is NOW, not onto the caller's copy.
+     A page holds a race object from its last render, and anything written to
+     that row in between — the wind captured on the start-sequence page is the
+     real case — would be silently reverted by spreading the stale copy back
+     over it. Re-reading costs one small get and removes the whole class of
+     bug; the caller's copy is only a fallback for a row not yet stored. */
+  const current = (await db.get("races", race.id)) ?? race;
+  if ((PROGRESS[current.status] ?? 0) >= (PROGRESS[status] ?? 0)) return current;
+  const row = { ...current, status, ...extra };
   await db.localWrite("races", row);
   return row;
 }
