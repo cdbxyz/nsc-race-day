@@ -11,6 +11,10 @@ import { el, flash, armedButton } from "./../ui.js";
 import { sync, fakeBackend } from "./../sync.js";
 import * as raceLog from "./../raceevents.js";
 import * as device from "./../device.js";
+import {
+  storageSupport, checkPersisted, requestPersistence, refreshEstimate,
+  storageState, formatBytes,
+} from "./../storage.js";
 import * as api from "./../supabase.js";
 import { supabaseBackend, pullReferenceData, lastRefreshedAt } from "./../backend.js";
 import { promptForPin } from "./../app.js";
@@ -81,6 +85,68 @@ export default {
        But it is no longer silent or accidental: it is tap-to-arm, and it
        appends a status_overridden event carrying the status before and
        after, so the history drawer explains a strange status months later. */
+    /* Storage. This is how DRILL.md step B2 is observed on a real device:
+       headless Chrome refuses persistence outright, so the automated drill
+       cannot test it at all and a human has to read it off a phone.
+
+       "Not supported" and "refused" are reported differently on purpose. One
+       is an old browser where the question does not exist; the other is a
+       browser that has considered it and said no, which is the answer that
+       actually costs a race day. */
+    const storageOut = section.querySelector("#dev-storage-out");
+    const storageResult = section.querySelector("#dev-storage-result");
+
+    async function renderStorage() {
+      const support = storageSupport();
+      const persisted = support.persisted ? await checkPersisted() : null;
+      if (support.estimate) await refreshEstimate();
+      const { usage, quota, quotaError } = storageState();
+
+      const persistedLine = !support.persist
+        ? "not supported by this browser"
+        : persisted === true
+          ? "YES — this phone will not be cleared"
+          : persisted === false
+            ? "NO — the browser may clear this app's data"
+            : "unknown (the browser will not say)";
+
+      const used = support.estimate
+        ? `${formatBytes(usage)} of ${formatBytes(quota)}` +
+          (quota ? ` (${((usage / quota) * 100).toFixed(2)}%)` : "")
+        : "not supported by this browser";
+
+      storageOut.textContent = [
+        `persisted    ${persistedLine}`,
+        `using        ${used}`,
+        `standalone   ${matchMedia("(display-mode: standalone)").matches ? "yes — installed to the home screen" : "no — running in the browser"}`,
+        quotaError ? `LAST ERROR   ${quotaError}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    section.querySelector("#dev-storage-refresh").addEventListener("click", async () => {
+      storageResult.textContent = "";
+      await renderStorage();
+    });
+
+    section.querySelector("#dev-storage-request").addEventListener("click", async () => {
+      if (!storageSupport().persist) {
+        storageResult.textContent =
+          "This browser has no persistent-storage API at all, so there is nothing to ask. Sync often.";
+        storageResult.className = "stub notice notice-error";
+        return;
+      }
+      const granted = await requestPersistence();
+      storageResult.textContent = granted
+        ? "Granted. This phone's race data will not be cleared for being unused."
+        : "Refused. The browser may clear this app's data if it is unused for a week or so — install to the home screen and try again, then sync often.";
+      storageResult.className = granted ? "stub notice notice-info" : "stub notice notice-error";
+      await renderStorage();
+    });
+
+    renderStorage();
+
     /* Naming the phone. The soft-lock banner on another device shows this
        name, and "Device 74b9eb claimed it" tells an OOD nothing they can
        act on. */

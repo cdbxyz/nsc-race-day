@@ -166,6 +166,24 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head"><span class="panel-title">Storage</span></div>
+      <div class="panel-body">
+        <p class="stub" id="dev-storage-plain">
+          Without persistent storage the browser may clear every race day on
+          this phone if the app is not opened for a week or so — including
+          anything that has not synced yet. Installing to the home screen is
+          what makes iOS grant it.
+        </p>
+        <pre class="devlog" id="dev-storage-out">checking…</pre>
+        <div class="actions">
+          <button class="btn" type="button" id="dev-storage-request">Request persistent storage</button>
+          <button class="btn ghost" type="button" id="dev-storage-refresh">Refresh</button>
+        </div>
+        <p class="stub" id="dev-storage-result"></p>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><span class="panel-title">This device</span></div>
       <div class="panel-body">
         <div class="field">

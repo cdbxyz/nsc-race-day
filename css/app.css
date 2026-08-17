@@ -184,6 +184,14 @@ h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spaci
 
 /* ---- pages ---- */
 .page[hidden]{display:none}
+
+/* [hidden] must beat any display we set on a class.
+   The browser's own [hidden] rule is display:none, but ANY class selector
+   outranks it — so .authbar{display:flex} rendered a 64px empty orange strip
+   on every page while the element was, as far as the DOM was concerned,
+   hidden. Two shell bars shipped like that. This is the one place in the
+   stylesheet that earns an !important. */
+[hidden]{display:none !important}
 .page{padding-top:4px}
 
 /* ---- panels ---- */

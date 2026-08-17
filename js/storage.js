@@ -23,7 +23,7 @@
 const listeners = new Set();
 
 let state = {
-  persisted: null, // null = not asked yet
+  persisted: null, // null = not asked yet, or the browser cannot say
   quotaError: null,
   usage: null,
   quota: null,
@@ -49,6 +49,47 @@ function announce() {
 }
 
 /**
+ * What this browser can actually do, so the dev panel can tell "the browser
+ * said no" apart from "the browser has no opinion". They look identical in a
+ * boolean and mean very different things: one is a refusal to fix, the other
+ * is an old browser where the question does not exist.
+ */
+export function storageSupport() {
+  const storage = globalThis.navigator?.storage;
+  return {
+    persist: typeof storage?.persist === "function",
+    persisted: typeof storage?.persisted === "function",
+    estimate: typeof storage?.estimate === "function",
+  };
+}
+
+/**
+ * Read whether storage is already persistent, WITHOUT asking for it.
+ *
+ * Separate from requestPersistence because the dev panel needs to report the
+ * current answer before anyone taps anything — B2 of the drill is "observe
+ * the result on a real device", and observing must not change it.
+ *
+ * @returns {Promise<boolean|null>} null when the browser cannot say.
+ */
+export async function checkPersisted() {
+  const storage = globalThis.navigator?.storage;
+  if (!storage?.persisted) {
+    state = { ...state, persisted: null };
+    announce();
+    return null;
+  }
+  try {
+    const persisted = await storage.persisted();
+    state = { ...state, persisted: Boolean(persisted) };
+  } catch {
+    state = { ...state, persisted: null };
+  }
+  announce();
+  return state.persisted;
+}
+
+/**
  * Ask the browser not to evict this app's data.
  *
  * Called on every boot, not once: the answer changes when the app is
@@ -57,7 +98,8 @@ function announce() {
 export async function requestPersistence() {
   const storage = globalThis.navigator?.storage;
   if (!storage?.persist) {
-    state = { ...state, persisted: false };
+    // Not a refusal — the question does not exist here.
+    state = { ...state, persisted: null };
     announce();
     return false;
   }
@@ -127,6 +169,20 @@ export function storageWarning() {
     );
   }
   return null;
+}
+
+/** "772 KB of 10.0 GB" — sized for a phone screen, not a spreadsheet. */
+export function formatBytes(bytes) {
+  if (bytes == null || !Number.isFinite(bytes)) return "unknown";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
 
 export function resetStorageState() {

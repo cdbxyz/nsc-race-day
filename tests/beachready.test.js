@@ -23,6 +23,9 @@ import {
   requestPersistence,
   resetStorageState,
   onStorageChange,
+  storageSupport,
+  checkPersisted,
+  formatBytes,
 } from "../js/storage.js";
 import { sleepWarning, isSupported } from "../js/wakelock.js";
 
@@ -93,7 +96,48 @@ test("persistence is requested, and a refusal is survivable", async () => {
   // No navigator.storage in node: the app must not fall over, just record it.
   const granted = await requestPersistence();
   assert.equal(typeof granted, "boolean");
-  assert.equal(storageState().persisted, granted);
+  assert.equal(granted, false, "nothing was granted");
+});
+
+test("\"not supported\" is reported differently from \"refused\"", async () => {
+  /* They collapse to the same boolean and mean very different things: one is
+     an old browser where the question does not exist, the other is a browser
+     that considered it and said no — and only the second costs a race day.
+     The dev panel has to be able to tell an OOD which one they are looking
+     at, because the fix (install to the home screen) only helps the second. */
+  assert.equal(storageSupport().persist, false, "node has no storage API");
+
+  await requestPersistence();
+  assert.equal(storageState().persisted, null, "unknown, not a refusal");
+
+  assert.equal(await checkPersisted(), null, "and reading it does not invent an answer");
+});
+
+test("checking persistence does not request it", async () => {
+  /* Drill step B2 is "observe the result on a real device". Observing must
+     not change it, or the check reports its own side effect. */
+  const source = await readFile(new URL("../js/storage.js", import.meta.url), "utf8");
+  const fn = source.slice(source.indexOf("export async function checkPersisted"));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+  assert.ok(!/\.persist\(\)/.test(body), "checkPersisted must never call persist()");
+  assert.match(body, /storage\.persisted\(\)/);
+});
+
+test("bytes are formatted for a phone screen, not a spreadsheet", () => {
+  assert.equal(formatBytes(null), "unknown");
+  assert.equal(formatBytes(512), "512 B");
+  assert.equal(formatBytes(790_528), "772 KB");
+  assert.equal(formatBytes(10_995_116_277_760), "10 TB", "no false precision at double digits");
+  assert.equal(formatBytes(1_073_741_824), "1.0 GB");
+});
+
+test("the dev panel can observe storage without a network or a race day", async () => {
+  // B2 has to be runnable on a phone standing in a car park.
+  const source = await readFile(new URL("../js/pages/dev.js", import.meta.url), "utf8");
+  assert.match(source, /checkPersisted/);
+  assert.match(source, /refreshEstimate/);
+  assert.match(source, /requestPersistence/);
+  assert.match(source, /display-mode: standalone/, "and says whether it is installed");
 });
 
 test("persistence is asked for on every boot, not once", async () => {
@@ -287,4 +331,42 @@ test("every tap target clears 44px in both directions", async () => {
 
   const correct = css.slice(css.indexOf("\n.correctbtn{"), css.indexOf("}", css.indexOf("\n.correctbtn{")));
   assert.match(correct, /min-height:44px/);
+});
+
+/* ---- [hidden] must actually hide ----------------------------------------
+ *
+ * The browser's own rule for [hidden] is display:none, but ANY class selector
+ * outranks it. .authbar{display:flex} and .testmodebar{display:flex} therefore
+ * rendered 64px of empty coloured strip on every page while the element was,
+ * as far as the DOM and every hidden-attribute check was concerned, hidden.
+ *
+ * Both shipped that way, and nothing caught it: contrast audits see no text,
+ * and probes that read `.hidden` see `true`. Only a screenshot showed it.
+ */
+
+test("a global [hidden] rule beats any display set on a class", async () => {
+  const css = await readFile(new URL("../css/app.css", import.meta.url), "utf8");
+  assert.match(
+    css,
+    /\[hidden\]\{display:none ?!important\}/,
+    "without this, any bar given display:flex ignores its hidden attribute"
+  );
+});
+
+test("every shell bar that sets display is covered by it", async () => {
+  /* The rule above is the fix; this is the list of things that depended on
+     it, so a new bar with display:flex is caught by the same reasoning. */
+  const css = await readFile(new URL("../css/app.css", import.meta.url), "utf8");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  const hiddenByDefault = [...html.matchAll(/<div class="([\w-]+)" id="([\w-]+)"[^>]*\shidden/g)];
+  assert.ok(hiddenByDefault.length >= 4, "found the shell bars");
+
+  const globalRule = /\[hidden\]\{display:none ?!important\}/.test(css);
+  for (const [, className] of hiddenByDefault) {
+    const rule = css.slice(css.indexOf(`\n.${className}{`), css.indexOf("}", css.indexOf(`\n.${className}{`)));
+    if (/display:\s*(flex|grid|block|inline)/.test(rule)) {
+      assert.ok(globalRule, `.${className} sets display and would ignore [hidden]`);
+    }
+  }
 });

@@ -176,14 +176,40 @@ things that fail in sun.
 
 ### B2 — Persistent storage
 
-- [ ] With the app installed, open `#/dev` and check the storage line
-- [ ] Confirm persistence is **granted**
+**Where to look:** open the app and go to `#/dev` → the **Storage** panel. It
+reads, on the device, with no network and no race day needed:
 
-> Headless Chrome reports `persisted: false` because it refuses the permission
-> without user engagement, so **Part A cannot verify this at all**. iOS grants
-> it to installed PWAs without prompting. This matters more than it sounds:
-> Safari clears the storage of sites unvisited for seven days, which is exactly
+```
+persisted    YES — this phone will not be cleared
+using        653 KB of 10 GB (0.01%)
+standalone   yes — installed to the home screen
+```
+
+Do this **twice**, and the order matters:
+
+- [ ] **Before installing**, in Safari: note what `persisted` says
+- [ ] Tap **Request persistent storage**. Note the result sentence
+- [ ] **Install to the home screen** (B1), launch from the icon, open `#/dev`
+      again
+- [ ] `standalone` now reads **yes — installed to the home screen**
+- [ ] `persisted` now reads **YES**. If it does not, tap **Request persistent
+      storage** once more and note what it says
+
+`persisted: NO` on an installed app is the finding worth reporting — it means
+this phone's race data can be cleared for being unused, and the OOD needs to
+be told to sync the same day rather than the following week.
+
+> **Why Part A cannot do this for you.** Headless Chrome refuses
+> `navigator.storage.persist()` outright without user engagement, so the
+> automated drill has nothing to observe. iOS grants it to installed PWAs
+> without prompting — which is the actual reason GUIDE.md insists on
+> installing rather than bookmarking. It matters more than it sounds: Safari
+> clears the storage of sites unvisited for seven days, and that is exactly
 > how a sailing club uses an app.
+>
+> The panel distinguishes **"not supported by this browser"** from **NO**. They
+> are not the same finding: the first is a browser too old to have the
+> question, the second is a browser that considered it and declined.
 
 ### B3 — Airplane mode, for real
 
