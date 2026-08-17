@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, unlink, mkdir, rm } from "node:fs/promises";
 
 import { stamp } from "../tools/stamp-sw.mjs";
 
@@ -21,6 +21,61 @@ test("every shell file on disk is in the precache list", async () => {
   const sw = await readFile(new URL("../sw.js", import.meta.url), "utf8");
   for (const path of ["./index.html", "./css/app.css", "./js/app.js", "./js/update.js"]) {
     assert.ok(sw.includes(`"${path}"`), `${path} missing from SHELL`);
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * The shell list is DISCOVERED, never maintained by hand.
+ *
+ * img/ was missing from the walk for several weeks. The mast logo and all
+ * four start-sequence flags loaded from the network, which meant broken
+ * images on a beach with no signal — the exact condition the app exists for.
+ *
+ * The fix was to add img/ to the directories that get walked, NOT to add
+ * those particular files to a list. This test is the difference between the
+ * two: it drops a brand-new file into img/ and requires the stamper to find
+ * it. A committee volunteer replacing the placeholder flags, or dropping in
+ * a real club logo, must not also have to know about a list in a build tool.
+ * ------------------------------------------------------------------------ */
+
+test("a new file dropped into img/ is precached without anyone being told", async () => {
+  const asset = new URL("../img/__drill-probe.svg", import.meta.url);
+  const nested = new URL("../img/__drill-nested/", import.meta.url);
+  const nestedAsset = new URL("../img/__drill-nested/deep.svg", import.meta.url);
+  const swPath = new URL("../sw.js", import.meta.url);
+  const original = await readFile(swPath, "utf8");
+
+  try {
+    await writeFile(asset, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    await mkdir(nested, { recursive: true });
+    await writeFile(nestedAsset, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+
+    // Exactly what `npm run stamp` does.
+    await stamp();
+    const stamped = await readFile(swPath, "utf8");
+
+    assert.ok(
+      stamped.includes('"./img/__drill-probe.svg"'),
+      "a new file in img/ must appear in SHELL after a stamp"
+    );
+    assert.ok(
+      stamped.includes('"./img/__drill-nested/deep.svg"'),
+      "and the walk must recurse, the way img/flags/ relies on"
+    );
+    assert.notEqual(stamped, original, "and the cache version must move with it");
+  } finally {
+    await unlink(asset).catch(() => {});
+    await rm(nested, { recursive: true, force: true });
+    // Put sw.js back exactly as it was, so the suite leaves no trace.
+    await writeFile(swPath, original);
+  }
+});
+
+test("the walked directories cover every asset kind the app ships", async () => {
+  const tool = await readFile(new URL("../tools/stamp-sw.mjs", import.meta.url), "utf8");
+  const dirs = tool.match(/const DIRECTORIES = \[([^\]]*)\]/)?.[1] ?? "";
+  for (const dir of ["css", "js", "fonts", "img"]) {
+    assert.match(dirs, new RegExp(`"${dir}"`), `${dir}/ must be walked, not hand-listed`);
   }
 });
 
