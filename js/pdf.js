@@ -41,7 +41,10 @@ function load() {
  *          rows:[[cell,...]], muted:number[], footer, filename}} cfg
  */
 function draw(cfg) {
-  const doc = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
+  /* Landscape. The sheet carries a column per lap plus helm, crew, class and
+     the forward-looking PY, and portrait cannot hold them without squeezing
+     every column to the point where everything needs truncating. */
+  const doc = new window.jspdf.jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 40;
@@ -61,12 +64,41 @@ function draw(cfg) {
     return x;
   }
 
+  const GUTTER = 6;
+
+  /**
+   * Draw one cell, INSIDE its own column.
+   *
+   * This is the whole of the overlap bug. It used to compute `width` and then
+   * ignore it for left-aligned text: doc.text() draws from x and keeps going,
+   * so "Jim Spencer + Chris D'Arcy Burt" ran straight over the class beside
+   * it. Nothing was being drawn twice — the cell simply had no right-hand
+   * edge. Every cell is now measured against ITS OWN column and shortened
+   * until it fits, so no cell can reach into its neighbour at any width.
+   */
   function place(index, text) {
     const column = cfg.columns[index];
     const width = column.width * scale;
     const x = xOf(index);
-    if (column.align === "right") doc.text(String(text), x + width - 6, y, { align: "right" });
-    else doc.text(String(text), x, y);
+    const room = Math.max(0, width - GUTTER);
+    const fitted = truncateTo(String(text ?? ""), room);
+    if (column.align === "right") doc.text(fitted, x + width - GUTTER, y, { align: "right" });
+    else doc.text(fitted, x, y);
+  }
+
+  /** Shorten with an ellipsis until it measures within `room` points. */
+  function truncateTo(text, room) {
+    if (!text) return "";
+    if (doc.getTextWidth(text) <= room) return text;
+    // Binary search the longest prefix that fits with the ellipsis.
+    let low = 0;
+    let high = text.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (doc.getTextWidth(`${text.slice(0, mid).trimEnd()}…`) <= room) low = mid;
+      else high = mid - 1;
+    }
+    return low > 0 ? `${text.slice(0, low).trimEnd()}…` : "";
   }
 
   function colHeads() {

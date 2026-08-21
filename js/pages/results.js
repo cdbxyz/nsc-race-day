@@ -16,9 +16,10 @@ import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
 import {
   resultInputs, correctionFor, raceLabel, raceName, entryLabel, entryDetail, liveEvents,
-  startTimeCheck, SEQUENCE_MS,
+  startTimeCheck, SEQUENCE_MS, boatState, lapPlan, formatElapsed,
 } from "./../state.js";
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
+import { factorFor, personalPy } from "./../handicap.js";
 import { savePdf } from "./../pdf.js";
 import { COMPASS, FORCE_CHOICES, windText, windShort } from "./../wind.js";
 import { SPEEDS } from "./../devclock.js";
@@ -68,6 +69,11 @@ async function load() {
   const helmById = new Map(helms.map((h) => [h.id, h]));
   const classById = new Map(classes.map((c) => [c.id, c]));
 
+  const season = rd.seasonForRace({ ...race, race_date: raceDay.date }, series);
+  const handicaps = await rd.handicapContext(season);
+  const plan = lapPlan(race, events);
+  const startAt = Date.parse(race.start_at ?? "") || null;
+
   const inputs = resultInputs({ race, entries, events }).map((row) => {
     const parts = {
       entry: row.entry,
@@ -75,13 +81,23 @@ async function load() {
       crew: row.entry.crew_id ? helmById.get(row.entry.crew_id) ?? null : null,
       klass: classById.get(row.entry.class_id) ?? null,
     };
+    /* Cumulative elapsed at each lap crossing, from the gun — the same
+       numbers the live cards showed, so the sheet and the screen agree. */
+    const boat = boatState(row.entry, events, { plan, startAt });
     return {
       ...row,
       // The combination IS the name — there are no hulls to borrow one from.
       name: entryLabel(parts),
+      // Separate fields, because they are separate columns. One combined
+      // string in a column headed "Helm" is how the crew got lost.
+      helmName: parts.helm?.name ?? "",
+      crewName: parts.crew?.name ?? "",
       helm: [parts.helm?.name, parts.crew?.name].filter(Boolean).join(" + "),
       klass: parts.klass?.name ?? "",
       sailNo: row.entry.sail_no ?? "",
+      lapTimes: boat.splits.map((s) => s.ms),
+      helmId: row.entry.helm_id,
+      winsBefore: rd.winsFor(row.entry.helm_id, handicaps),
     };
   });
 
@@ -92,6 +108,8 @@ async function load() {
     events,
     entries,
     inputs,
+    handicaps,
+    season,
     // Ended is an event, not a status column: undoing the ending puts the
     // race back to live, and publish has to follow that.
     ended: liveEvents(events).some((e) => e.type === "race_ended"),
@@ -443,49 +461,102 @@ export function parseHms(text) {
  * Dropped entirely when nobody in the race has one, rather than printed as a
  * column of dashes: a results sheet with an empty column invites the reader
  * to wonder what went missing. */
+/* Scored rows come from scoring.js, which builds its own shape from a fixed
+   field list — it is a scoring engine, not a data bus, and CLAUDE.md keeps it
+   pure. So the presentation fields (helm, crew, sail number, lap times, win
+   count) are joined back on by id here rather than smuggled through it.
+
+   Without this the sheet drew empty Helm and Crew columns and no Sail column
+   at all: every one of those fields was silently dropped in scoring. */
+function sheetRows() {
+  const { results, inputs } = context;
+  const byId = new Map(inputs.map((i) => [i.id, i]));
+  const merge = (r) => ({ ...byId.get(r.id), ...r });
+  return { scored: results.scored.map(merge), out: results.out.map(merge) };
+}
+
+function hasSailNumbers() {
+  const { scored, out } = sheetRows();
+  return [...scored, ...out].some((r) => String(r.sailNo ?? "").trim());
+}
+
+/** How many lap columns this race needs — the most any boat actually sailed. */
+function lapColumnCount() {
+  const { scored, out } = sheetRows();
+  return Math.max(0, ...[...scored, ...out].map((r) => (r.lapTimes ?? []).length));
+}
+
+/**
+ * The PY this helm carries into their NEXT race because of this one.
+ *
+ * Straight through the handicap engine — factorFor is the club's rule and is
+ * not restated here. A win adds one to the count, which may move the helm
+ * onto a lower factor; everyone else keeps the PY they sailed under today.
+ */
+function nextPyFor(row, won) {
+  const base = Number(row.basePy ?? row.py);
+  if (!Number.isFinite(base) || base <= 0) return "";
+  const wins = Number(row.winsBefore ?? 0) + (won ? 1 : 0);
+  return String(Math.round(personalPy(base, factorFor(wins))));
+}
+
 function exportColumns() {
   const columns = [{ label: "Pos", width: 5, align: "left" }];
-  if (hasSailNumbers()) columns.push({ label: "Sail", width: 8, align: "left" });
+  if (hasSailNumbers()) columns.push({ label: "Sail", width: 7, align: "left" });
+  /* Widths are relative units, scaled to the page. Sized so the HEADINGS fit
+     without truncation — a column headed "LA…" is worse than a narrow one,
+     because the reader cannot tell what they are looking at. */
   columns.push(
-    { label: "Helm", width: 24, align: "left" },
-    { label: "Class", width: 16, align: "left" },
-    { label: "PY", width: 18, align: "left" },
-    { label: "Laps", width: 6, align: "right" },
-    { label: "Elapsed", width: 12, align: "right" },
-    { label: "Lap adj.", width: 12, align: "right" },
+    { label: "Helm", width: 17, align: "left" },
+    { label: "Crew", width: 15, align: "left" },
+    { label: "Class", width: 13, align: "left" },
+    { label: "PY", width: 10, align: "left" },
+    { label: "Laps", width: 7, align: "right" }
+  );
+  for (let lap = 1; lap <= lapColumnCount(); lap += 1) {
+    columns.push({ label: `L${lap}`, width: 9, align: "right" });
+  }
+  columns.push(
+    { label: "Elapsed", width: 11, align: "right" },
+    { label: "Lap adj.", width: 11, align: "right" },
     { label: "Corrected", width: 12, align: "right" },
-    { label: "Pts", width: 7, align: "right" }
+    { label: "Pts", width: 6, align: "right" },
+    { label: "Next PY", width: 10, align: "right" }
   );
   return columns;
 }
 
-function hasSailNumbers() {
-  const { results } = context;
-  return [...results.scored, ...results.out].some((r) => String(r.sailNo ?? "").trim());
-}
-
 function exportRows() {
-  const { results } = context;
+  const { scored, out } = sheetRows();
   const sail = hasSailNumbers();
+  const laps = lapColumnCount();
 
-  const line = (r, racing) => {
+  const line = (r, racing, won) => {
     const cells = [racing ? placeText(r) : r.code || "—"];
     if (sail) cells.push(String(r.sailNo ?? "").trim());
-    cells.push(r.name, r.klass, pyText(r));
-    if (racing) {
-      cells.push(String(r.laps), hms(r.elapsed), hms(r.ladj), hms(r.corrected));
-    } else {
-      cells.push("", "", "", "");
+    // One field per column. Helm and crew are separate values, never joined.
+    cells.push(r.helmName ?? "", r.crewName ?? "", r.klass ?? "", pyText(r));
+    cells.push(racing ? String(r.laps) : "");
+
+    /* A boat that sailed fewer laps leaves the later cells blank rather than
+       borrowing a neighbour's time. */
+    const times = r.lapTimes ?? [];
+    for (let i = 0; i < laps; i += 1) {
+      cells.push(times[i] == null ? "" : formatElapsed(times[i]));
     }
+
+    if (racing) cells.push(hms(r.elapsed), hms(r.ladj), hms(r.corrected));
+    else cells.push("", "", "");
     cells.push(formatPoints(r.points));
+    cells.push(nextPyFor(r, won));
     return cells;
   };
 
-  const rows = results.scored.map((r) => line(r, true));
+  const rows = scored.map((r, i) => line(r, true, i === 0 && !r.tied));
   const muted = [];
-  results.out.forEach((r) => {
+  out.forEach((r) => {
     muted.push(rows.length);
-    rows.push(line(r, false));
+    rows.push(line(r, false, false));
   });
   return { rows, muted };
 }
@@ -500,6 +571,13 @@ function exportPanel() {
     rd.isTestDay(raceDay) ? "TEST DATA — not a real race" : null,
     `Max laps ${context.results.maxLaps}`,
     `${context.results.starters} starters`,
+    /* Say what the last column means, because it is the one number on the
+       sheet that is not about today's race. Whether it is already true or
+       still a projection depends on publication, so the wording follows
+       that rather than claiming one or the other. */
+    race.status === "published"
+      ? "L1-Ln are elapsed times from the gun · Next PY is what each helm carries into their NEXT race"
+      : "L1-Ln are elapsed times from the gun · Next PY is what each helm WILL carry into their next race once these results are published",
   ]
     .filter(Boolean)
     .join(" · ");
