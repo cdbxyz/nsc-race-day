@@ -370,3 +370,32 @@ test("every shell bar that sets display is covered by it", async () => {
     }
   }
 });
+
+test("the drill checks WHICH logo resolved, not merely that one did", async () => {
+  /* `complete && naturalWidth > 0` is true for any image that loads, so it
+     passed happily while the mast still showed the placeholder. The check has
+     to name the file, or it is not a check. */
+  const drill = await readFile(new URL("../tools/drill.mjs", import.meta.url), "utf8");
+  const check = drill.slice(drill.indexOf('note("mastLogo"'), drill.indexOf('== 3.'));
+
+  assert.ok(check.length > 200, "the mastLogo check exists");
+  assert.match(check, /resolved\.pathname\.split\("\/"\)\.pop\(\)/, "reports the resolved file");
+  assert.match(check, /status/, "and that the URL answers");
+  assert.match(check, /precached/, "and that it works with no signal");
+  assert.match(check, /rendered/, "and the box it occupies");
+  assert.match(check, /inkOnMast/, "and whether it can actually be seen");
+
+  assert.ok(
+    !/note\("logoDrawn"/.test(drill),
+    "the old boolean must not come back"
+  );
+});
+
+test("exactly one place in the app names the logo file", async () => {
+  /* One source, not several — the report that started this was a reasonable
+     guess that several places referenced it and only some were switched. */
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const refs = [...html.matchAll(/nsc-logo\.[a-z]+/g)].map((m) => m[0]);
+  assert.deepEqual(refs, ["nsc-logo.png"], "index.html names it once, and as the PNG");
+  assert.ok(!/<svg/.test(html), "and no inline SVG stands in for it");
+});

@@ -85,8 +85,61 @@ await send("Page.navigate",{url:BASE}); await sleep(4000);
 await ev(`document.getElementById("pin-dialog")?.close()`);
 note("appRenderedOffline", await ev(`!!document.querySelector(".page:not([hidden])")`));
 note("fontsLoaded", await ev(`document.fonts.ready.then(()=>document.fonts.size>0)`));
-note("logoDrawn", await ev(`(()=>{const i=document.getElementById("mast-logo");
-  return i.complete && i.naturalWidth>0;})()`));
+/* The mast logo, checked properly.
+   `complete && naturalWidth>0` was true for ANY image that loaded, including
+   the placeholder it was supposed to have replaced — which is how a stale
+   reference got past this twice. It now reports which FILE the browser
+   actually resolved, that the URL answers 200, that the bytes are in the
+   precache, the size it renders at, and the mean ink colour against the mast
+   it is drawn on, so a logo that loads perfectly and cannot be seen is a
+   finding rather than a pass. */
+note("mastLogo", await ev(`(async()=>{
+  const img = document.getElementById("mast-logo");
+  if (!img) return { ok: false, why: "no #mast-logo element" };
+
+  const resolved = new URL(img.currentSrc || img.src, location.href);
+  const box = img.getBoundingClientRect();
+  const status = await fetch(resolved.href).then((r) => r.status).catch(() => 0);
+
+  const keys = await caches.keys();
+  const cache = keys.length ? await caches.open(keys[0]) : null;
+  const precached = cache ? Boolean(await cache.match(resolved.href)) : false;
+
+  // Mean colour of the opaque ink, so an invisible logo shows up here.
+  let meanInk = null;
+  try {
+    const cv = document.createElement("canvas");
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    const cx = cv.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    const d = cx.getImageData(0, 0, cv.width, cv.height).data;
+    let n = 0, r = 0, g = 0, b = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 200) { n += 1; r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+    }
+    if (n) meanInk = [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+  } catch { /* a cross-origin image would taint the canvas; ours never is */ }
+
+  const lum = ([r, g, b]) => {
+    const f = (c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : (((c / 255) + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const mast = getComputedStyle(document.querySelector(".mast")).backgroundColor
+    .match(/\\d+/g).slice(0, 3).map(Number);
+  const contrast = meanInk
+    ? Math.round(((Math.max(lum(meanInk), lum(mast)) + 0.05) /
+                  (Math.min(lum(meanInk), lum(mast)) + 0.05)) * 100) / 100
+    : null;
+
+  return {
+    file: resolved.pathname.split("/").pop(),
+    status,
+    precached,
+    natural: [img.naturalWidth, img.naturalHeight],
+    rendered: [Math.round(box.width), Math.round(box.height)],
+    inkOnMast: contrast,
+  };
+})()`));
 
 console.log("\n== 3. Set up a two-race day, entirely offline ==");
 await ev(`location.hash="#/setup"`); await sleep(900);

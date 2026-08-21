@@ -65,13 +65,34 @@ anything listed there is a file that will not be available offline.
 ```
 appRenderedOffline: true
 fontsLoaded: true
-logoDrawn: true
+mastLogo: { file: "nsc-logo.png", status: 200, precached: true,
+            natural: [120,120], rendered: [40,40], inkOnMast: 1.09 }
 ```
 
-The app opens completely from cache. `logoDrawn` is here because `img/` was
-missing from the precache list for several weeks — the logo and the four
-start-sequence flags loaded from the network, which meant broken images in
-exactly the condition the app exists for. Fixed, and now checked.
+The app opens completely from cache. The logo is checked here because `img/`
+was missing from the precache list for several weeks — the mast logo and the
+four start-sequence flags loaded from the network, which meant broken images
+in exactly the condition the app exists for.
+
+Read every field; each one catches a different miss:
+
+| Field | What a bad value means |
+|---|---|
+| `file` | Which file the browser **actually resolved**. A stale reference elsewhere in the markup shows up here as the wrong name. |
+| `status` | The URL answers. `0` or `404` means a reference points at nothing. |
+| `precached` | It is in the service worker cache, so it draws with no signal. |
+| `natural` | The real pixels. Below `[120,120]` will be soft at 3× on a phone. |
+| `rendered` | The box it occupies. `[0,0]` means it loaded and is not visible. |
+| `inkOnMast` | Contrast of the artwork's mean ink against the navy mast. |
+
+> `inkOnMast: 1.09` in the example is a **finding, not a pass**: the club
+> burgee is black line art and the mast is navy, so it loads perfectly and
+> cannot be seen. A light version of the same file fixes it with no code
+> change.
+>
+> The old check was `complete && naturalWidth > 0`, which is true for *any*
+> image that loads — including the placeholder it was meant to have replaced.
+> That is how a logo miss got past this drill twice.
 
 ### 3–4. Set up a day and sign boats on, offline
 
