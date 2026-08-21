@@ -48,14 +48,36 @@ await send("Runtime.enable"); await send("Page.enable"); await send("Network.ena
 await send("Emulation.setDeviceMetricsOverride",{width:390,height:844,deviceScaleFactor:2,mobile:true});
 
 console.log("\n== 1. Cold start online, then install-equivalent cache ==");
-await send("Page.navigate",{url:BASE}); await sleep(4000);
-await ev(`document.getElementById("pin-dialog")?.close()`);
-await ev(`${M("db")}.then(m=>m.clearAll())`);
+
+/* Start from an empty database, cleared BEFORE the app boots.
+   Clearing it from under a running app is what a drill must not do: the app
+   is mid-write on boot (resume check, reference pull), and tearing those
+   transactions up logs "transaction failed" — a fault of the probe that
+   looks exactly like a fault of the app. Deleting it on a bare page of the
+   same origin, with nothing else holding a connection, is deterministic. */
+await send("Page.navigate",{url:BASE+"?drill-reset"}); await sleep(1200);
+await ev(`new Promise((resolve)=>{
+  const req = indexedDB.deleteDatabase("nsc-race-day");
+  req.onsuccess = req.onerror = req.onblocked = () => resolve(true);
+})`);
+
 await send("Page.navigate",{url:BASE}); await sleep(4000);
 await ev(`document.getElementById("pin-dialog")?.close()`);
 note("serviceWorkerActive", await ev(`!!navigator.serviceWorker.controller`));
-note("shellCached", await ev(`caches.keys().then(async ks=>{
-  const c=await caches.open(ks[0]); return (await c.keys()).length;})`));
+
+/* Wait for the worker to finish activating before counting. Reading the
+   cache mid-install reports a number that is simply wrong — it once said 47
+   of 60 and sent me looking for a precache failure that did not exist. */
+await waitFor(`navigator.serviceWorker.ready.then(r=>r.active?.state==="activated")`,"sw activated");
+await sleep(1500);
+note("shellPrecached", await ev(`(async()=>{
+  const keys=await caches.keys();
+  const c=await caches.open(keys[0]);
+  const cached=new Set((await c.keys()).map(r=>new URL(r.url).pathname));
+  const sw=await fetch("sw.js").then(r=>r.text());
+  const shell=[...sw.matchAll(/^\\s*"(\\.\\/[^"]*)"/gm)].map(m=>m[1]);
+  const missing=shell.filter(p=>!cached.has(new URL(p,location.href).pathname));
+  return {of:shell.length, missing};})()`));
 
 console.log("\n== 2. Go offline and cold-start from cache ==");
 await offline(true);

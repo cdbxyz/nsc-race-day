@@ -24,7 +24,9 @@ const SW_PATH = path.join(ROOT, "sw.js");
 
 /* Everything the app needs to open with no signal. Directories are walked, so
    adding a page module or a font is picked up without touching anything. */
-const ROOT_FILES = ["index.html", "manifest.json", "icon.svg"];
+/* GUIDE.md is shell, not documentation-on-the-side: the app renders it as a
+   page, and an OOD who needs it is by definition the one with no signal. */
+const ROOT_FILES = ["index.html", "manifest.json", "icon.svg", "GUIDE.md"];
 /* img/ matters as much as fonts/: the mast logo and the four start-sequence
    flags are chrome an OOD reads at a glance, and a broken image on a beach
    with no signal looks like a broken app. */

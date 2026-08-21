@@ -10,9 +10,10 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "394736c21ae6";
+const VERSION = "adc6e4d35920";
 const SHELL = [
   "./",
+  "./GUIDE.md",
   "./css/app.css",
   "./fonts/atkinson-mono-400.woff2",
   "./fonts/atkinson-mono-500.woff2",
@@ -42,8 +43,10 @@ const SHELL = [
   "./js/device.js",
   "./js/devmode.js",
   "./js/handicap.js",
+  "./js/markdown.js",
   "./js/pages/checklist.js",
   "./js/pages/dev.js",
+  "./js/pages/guide.js",
   "./js/pages/home.js",
   "./js/pages/live.js",
   "./js/pages/registers.js",

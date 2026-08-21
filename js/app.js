@@ -27,8 +27,11 @@ import live from "./pages/live.js";
 import results from "./pages/results.js";
 import standdown from "./pages/standdown.js";
 import dev from "./pages/dev.js";
+import guide from "./pages/guide.js";
 
-const PAGES = { home, setup, registers, signon, checklist, sequence, live, results, standdown, dev };
+const PAGES = {
+  home, setup, registers, signon, checklist, sequence, live, results, standdown, dev, guide,
+};
 
 let router;
 let updatePrompt;

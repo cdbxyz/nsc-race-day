@@ -10,7 +10,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for scope, schema and behaviour, and
 
 | Document | For whom |
 |---|---|
-| [GUIDE.md](GUIDE.md) | The Officer of the Day. Plain language, no jargon — read it before your first duty. |
+| [GUIDE.md](GUIDE.md) | The Officer of the Day. Plain language, no jargon. Also rendered in the app at `#/guide`, from this same file, and precached so it works with no signal. |
 | [DRILL.md](DRILL.md) | Whoever maintains the app. The pre-season offline drill, automated and physical-device halves. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Anyone changing the code. Scope, schema and the decisions behind them. |
 | [CLAUDE.md](CLAUDE.md) | The project's hard rules. Read before any work. |

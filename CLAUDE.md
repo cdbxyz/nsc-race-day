@@ -126,6 +126,22 @@ Hard rules:
   here, not the target, and critical text stays at 10px or larger. Every tap
   target clears 44px in BOTH directions: the footer links were 44 tall and 35
   wide, which counts as a failure.
+- **Form controls share one box.** `--control-h` (44px), one padding, one
+  border, `--body` everywhere except genuinely numeric values (date, time,
+  number, `inputmode="numeric"`), which take `--mono` for tabular figures.
+  A picker button, a select and a text input in one form must differ only in
+  what they do. Give buttons an explicit height: a `<button>` with
+  `display:flex` sizes from an anonymous internal block and Chrome made the
+  picker 103px next to 44px inputs.
+- **`--go` is the forward step, and only that.** Green (#0B6B45, 6.56:1
+  against its white text) marks the button that advances the race day —
+  start, next step, next race. Red stays destructive, navy stays commit
+  (publish, close the day). One `.btn.go` per screen, or it stops meaning
+  anything.
+- **GUIDE.md is the OOD guide and the app renders that file.** One document,
+  never a second copy: `js/markdown.js` renders it at `#/guide`, GUIDE.md is
+  precached as shell, and `tests/guide.test.js` fails if the document grows a
+  construct the renderer cannot handle. The renderer never touches innerHTML.
 - **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
   8-point compass direction it blows FROM. Beaufort because it is what an
   OOD can judge by eye from the beach without an anemometer, and what the

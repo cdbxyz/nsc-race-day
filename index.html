@@ -111,6 +111,13 @@
   </section>
 
   <!-- 6 -->
+  <section class="page" id="page-guide" hidden aria-label="Guide">
+    <!-- The document supplies its own title, so the shell's is for screen
+         readers only rather than printed twice. -->
+    <h2 class="visually-hidden">Guide</h2>
+    <div id="guide-body"></div>
+  </section>
+
   <section class="page" id="page-standdown" hidden aria-label="Stand-down">
     <h2>Stand-down</h2>
     <div id="standdown-body"></div>
@@ -174,7 +181,7 @@
           anything that has not synced yet. Installing to the home screen is
           what makes iOS grant it.
         </p>
-        <pre class="devlog" id="dev-storage-out">checking…</pre>
+        <dl class="dev-kv" id="dev-storage-out"></dl>
         <div class="actions">
           <button class="btn" type="button" id="dev-storage-request">Request persistent storage</button>
           <button class="btn ghost" type="button" id="dev-storage-refresh">Refresh</button>
@@ -196,7 +203,7 @@
           is not.
         </p>
         <div class="actions"><button class="btn ghost" type="button" id="dev-device-save">Save name</button></div>
-        <pre class="devlog" id="dev-device-id"></pre>
+        <dl class="dev-kv" id="dev-device-id"></dl>
       </div>
     </div>
 
@@ -321,6 +328,15 @@
     <a href="#/results">Results</a>
     <a href="#/standdown">Stand-down</a>
     <a href="#/dev">Dev</a>
+  </nav>
+
+  <!-- Its own row, below the page list: findable under pressure without
+       sitting among the race controls competing for a thumb. -->
+  <nav class="foot foot-help" aria-label="Help">
+    <a class="helplink" href="#/guide">
+      <span class="helpmark" aria-hidden="true">?</span>
+      <span>How to run a race day</span>
+    </a>
   </nav>
 
 </div>

@@ -207,7 +207,7 @@ function armPanel(race, entries, sequence) {
 
   body.append(windPicker(race));
 
-  const start = el("button.btn.bigstart", {
+  const start = el("button.btn.go.bigstart", {
     type: "button",
     text: "Start 10-minute sequence",
     onclick: async () => {

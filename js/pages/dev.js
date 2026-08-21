@@ -115,14 +115,17 @@ export default {
           (quota ? ` (${((usage / quota) * 100).toFixed(2)}%)` : "")
         : "not supported by this browser";
 
-      storageOut.textContent = [
-        `persisted    ${persistedLine}`,
-        `using        ${used}`,
-        `standalone   ${matchMedia("(display-mode: standalone)").matches ? "yes — installed to the home screen" : "no — running in the browser"}`,
-        quotaError ? `LAST ERROR   ${quotaError}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
+      renderKV(storageOut, [
+        ["persisted", persistedLine],
+        ["using", used],
+        [
+          "standalone",
+          matchMedia("(display-mode: standalone)").matches
+            ? "yes — installed to the home screen"
+            : "no — running in the browser",
+        ],
+        quotaError ? ["last error", quotaError] : null,
+      ]);
     }
 
     section.querySelector("#dev-storage-refresh").addEventListener("click", async () => {
@@ -153,7 +156,7 @@ export default {
     const deviceNameInput = section.querySelector("#dev-device-name");
     const deviceIdOut = section.querySelector("#dev-device-id");
     device.deviceName().then((n) => { deviceNameInput.value = n; });
-    device.deviceId().then((id) => { deviceIdOut.textContent = `device id  ${id}`; });
+    device.deviceId().then((id) => renderKV(deviceIdOut, [["device id", id]]));
     section.querySelector("#dev-device-save").addEventListener("click", async () => {
       const saved = await device.setDeviceName(deviceNameInput.value);
       deviceNameInput.value = saved || (await device.deviceName());
@@ -361,4 +364,24 @@ async function writeTestEvent() {
     // Tap time, captured on-device — never a server clock.
     occurred_at: db.nowIso(),
   });
+}
+
+/**
+ * Key/value rows for the dev panel.
+ *
+ * Not a <pre>: a monospace block only aligns while every value is short, and
+ * these are not — a device UUID and a sentence about eviction both blew
+ * straight through the panel at 390px. A definition list wraps where it
+ * should and keeps the label readable when it does.
+ */
+function renderKV(node, rows) {
+  node.textContent = "";
+  for (const row of rows) {
+    if (!row) continue;
+    const [label, value] = row;
+    node.append(
+      el("dt", { text: label }),
+      el("dd", { text: String(value ?? "") })
+    );
+  }
 }

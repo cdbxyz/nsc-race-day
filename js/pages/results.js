@@ -625,7 +625,7 @@ function publishPanel() {
         }),
       ]),
       el("div.actions", {}, [
-        el("button.btn", { type: "button", text: "Next race →", onclick: () => nextRace() }),
+        el("button.btn.go", { type: "button", text: "Next race →", onclick: () => nextRace() }),
         el("button.btn.ghost", { type: "button", text: "Stand down", onclick: () => navigate("standdown") }),
       ]),
     ]);

@@ -66,7 +66,7 @@ async function render() {
           }),
         ]),
         el("div.actions", {}, [
-          el("button.btn", { type: "button", text: "Start sequence →", onclick: () => navigate("sequence") }),
+          el("button.btn.go", { type: "button", text: "Start sequence →", onclick: () => navigate("sequence") }),
         ]),
       ])
     );

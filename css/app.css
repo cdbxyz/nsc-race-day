@@ -25,7 +25,14 @@
 :root{
   --mist:#F2F5FA; --chalk:#FFFFFF; --ink:#0A1B3D; --hull:#1B3B76;
   --slate:#5F6E8C; --line:#D2DAE8; --flag:#C8102E;
-  --go:#0E7A4A;
+  /* GO — the forward step through the race day. Deep enough to read in sun:
+     6.56:1 against the white text on it, above the club red's 5.88 and well
+     clear of the 5.1 we treat as the washed-out threshold. Reserved for
+     advancing the flow; red stays destructive, navy stays commit. */
+  --go:#0B6B45; --go-dark:#084F34;
+  /* One height for every form control, so a picker, a select and a text box
+     in the same form are the same object. 44px is the touch-target floor. */
+  --control-h:44px;
   --disp:"Barlow Condensed","Arial Narrow",sans-serif;
   --body:"Atkinson Hyperlegible Next",system-ui,-apple-system,sans-serif;
   --mono:"Atkinson Hyperlegible Mono",ui-monospace,Menlo,monospace;
@@ -202,15 +209,52 @@ h2{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spaci
 .panel-body{padding:12px}
 
 /* ---- form fields ---- */
-.field{display:flex;flex-direction:column;gap:3px;min-width:0}
-.field label{font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-size:.68rem;font-weight:600;color:var(--slate)}
-.field input,.field select{
-  font-family:var(--mono);font-size:16px;color:var(--ink);
-  border:1px solid var(--line);border-radius:2px;background:var(--chalk);
-  padding:10px 8px;width:100%;min-width:0;min-height:44px;
+.field{display:flex;flex-direction:column;gap:4px;min-width:0;margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
+  font-size:.68rem;font-weight:600;color:var(--slate);line-height:1.2;
 }
-.field input.text{font-family:var(--body);text-align:left}
-.field input:focus-visible,.field select:focus-visible{outline:2px solid var(--hull);outline-offset:-1px;border-color:var(--hull)}
+
+/* EVERY control in a form shares this box. A picker button, a select and a
+   text input sitting in one form must look like one form — they differ only
+   in what they do, never in how tall they are or what face they are set in.
+
+   The explicit `height` matters: a <button> with display:flex sizes its
+   content box from an anonymous internal block, and Chrome made the picker
+   button 103px — roughly 3x the inputs beside it — from a single line of
+   text. Fixing the height makes the control correct by construction rather
+   than by hoping the browser agrees. */
+.field input,
+.field select,
+.field .pickerbutton{
+  font-family:var(--body);font-size:16px;line-height:1.25;color:var(--ink);
+  border:1px solid var(--line);border-radius:2px;background:var(--chalk);
+  padding:0 10px;width:100%;min-width:0;
+  height:var(--control-h);min-height:var(--control-h);
+}
+/* `.text` is no longer needed to opt into the body face — that is now the
+   default for every control — but the class is still on many inputs, so it
+   is neutralised rather than left to fight the numeric rule below on equal
+   specificity, which is exactly how the sail-number box ended up in the
+   wrong face. */
+.field input.text{text-align:left}
+
+/* Mono, with tabular figures, only where the value really is a number —
+   dates, times and counts line up; names and choices read as prose.
+   Last, so it wins the specificity tie with `.text`. */
+.field input[type="date"],
+.field input[type="time"],
+.field input[type="number"],
+.field input[inputmode="numeric"]{font-family:var(--mono)}
+.field textarea{
+  font-family:var(--body);font-size:16px;line-height:1.45;color:var(--ink);
+  border:1px solid var(--line);border-radius:2px;background:var(--chalk);
+  padding:10px;width:100%;min-width:0;
+}
+.field input:focus-visible,
+.field select:focus-visible,
+.field .pickerbutton:focus-visible{outline:2px solid var(--hull);outline-offset:-1px;border-color:var(--hull)}
 
 /* ---- buttons ---- */
 button.btn{
@@ -221,6 +265,9 @@ button.btn{
 }
 button.btn.ghost{background:transparent;color:var(--ink)}
 button.btn.danger{background:var(--flag);border-color:var(--flag);color:#fff}
+/* The primary "go" of each step. One per screen, or it stops meaning anything. */
+button.btn.go{background:var(--go);border-color:var(--go);color:#fff}
+button.btn.go:active{background:var(--go-dark);border-color:var(--go-dark)}
 button.btn:active{background:var(--hull);border-color:var(--hull);color:var(--chalk)}
 button.btn:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
 button.btn[disabled]{opacity:.45;cursor:default}
@@ -582,11 +629,10 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 
 /* ---- register pickers ----
    A field that is a button: there is no text input to mistype a helm into. */
+/* Box comes from the shared control rule above; this adds only the layout of
+   the value and its chevron. */
 .pickerbutton{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:48px;
-  padding:10px 12px;cursor:pointer;text-align:left;
-  border:1px solid var(--line);border-radius:2px;background:var(--chalk);color:var(--ink);
-  font-family:var(--body);font-size:16px;
+  display:flex;align-items:center;gap:8px;cursor:pointer;text-align:left;
 }
 .pickerbutton:active{background:var(--mist)}
 .pickerbutton:focus-visible{outline:2px solid var(--hull);outline-offset:-1px}
@@ -749,4 +795,64 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 .guideline{margin:14px 2px 0;font-size:.8rem;line-height:1.45}
 /* An inline link is still a tap target. */
 .guideline .linkish{display:inline-flex;align-items:center;min-height:44px}
-.guidenote{color:var(--slate)}
+
+/* ---- dev panel key/value rows ----
+   A <pre> only aligns while every value is short, and a device UUID is not.
+   These wrap inside the panel instead of pushing it sideways. */
+.dev-kv{
+  margin:10px 0 0;padding:10px;border-radius:2px;
+  background:var(--ink);color:#B9CCEA;
+  display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:4px 12px;
+  font-size:.74rem;line-height:1.45;
+}
+.dev-kv dt{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;
+  font-size:.64rem;font-weight:600;color:#8FB0DE;white-space:nowrap;
+}
+.dev-kv dd{
+  margin:0;font-family:var(--mono);color:#fff;
+  min-width:0;overflow-wrap:anywhere;
+}
+
+/* ---- the guide, rendered from GUIDE.md ---- */
+.foot-help{margin-top:4px;padding-top:0;border-top:none}
+.helplink{
+  display:flex;align-items:center;gap:9px;
+  min-height:44px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:3px;background:var(--chalk);
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
+  font-size:.74rem;font-weight:600;color:var(--hull);text-decoration:none;
+}
+.helplink:active{background:var(--mist)}
+.helpmark{
+  flex:none;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--hull);color:#fff;font-size:.78rem;line-height:1;
+}
+.guidedoc{font-size:.92rem;line-height:1.55;color:var(--ink)}
+.guidedoc h2{font-size:1.35rem;margin:22px 0 8px}
+.guidedoc h3{font-size:1.05rem;margin:20px 0 6px}
+.guidedoc h4{font-size:.94rem;margin:16px 0 4px}
+.guidedoc p{margin:0 0 10px}
+.guidedoc hr{border:none;border-top:1px solid var(--line);margin:18px 0}
+.guidedoc code{
+  font-family:var(--mono);font-size:.86em;
+  background:var(--mist);border:1px solid var(--line);border-radius:2px;padding:0 4px;
+}
+.guidedoc .mdlist{margin:0 0 12px;padding-left:20px}
+.guidedoc .mdlist li{margin-bottom:5px}
+.guidedoc .mdquote{
+  margin:0 0 12px;padding:10px 12px;
+  background:var(--mist);border-left:3px solid var(--hull);border-radius:0 2px 2px 0;
+}
+.guidedoc .mdquote p:last-child{margin-bottom:0}
+/* Wide tables scroll inside their own box, never the page. */
+.mdtable-wrap{overflow-x:auto;margin:0 0 14px;-webkit-overflow-scrolling:touch}
+.mdtable{border-collapse:collapse;width:100%;font-size:.84rem}
+.mdtable th,.mdtable td{
+  text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top;
+}
+.mdtable th{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;
+  font-size:.7rem;color:var(--hull);white-space:nowrap;
+}

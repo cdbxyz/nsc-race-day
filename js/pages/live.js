@@ -293,7 +293,7 @@ function racingGrid(state) {
 function endBar(state) {
   if (state.ended) {
     return el("div.actions", { style: "padding:12px 0 0" }, [
-      el("button.btn", { type: "button", text: "Results →", onclick: () => navigate("results") }),
+      el("button.btn.go", { type: "button", text: "Results →", onclick: () => navigate("results") }),
     ]);
   }
 

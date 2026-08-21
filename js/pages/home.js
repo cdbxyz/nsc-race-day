@@ -76,7 +76,7 @@ function todayHero(scheduled) {
 
   children.push(
     el("div.actions", { style: "padding:6px 0 0" }, [
-      el("button.btn", { type: "button", text: "Start a race day", onclick: () => navigate("setup") }),
+      el("button.btn.go", { type: "button", text: "Start a race day", onclick: () => navigate("setup") }),
     ])
   );
 
@@ -84,27 +84,20 @@ function todayHero(scheduled) {
 }
 
 const TILES = [
-  ["registers", "Registers", "Boats, members, classes and the season programme"],
+  ["registers", "Registers", "Members, classes, combinations and the programme"],
   ["results", "Results", "The latest race sheet, and sharing it"],
   ["standdown", "Stand-down", "Tally check and closing the day"],
   ["dev", "Dev tools", "Sync, fast clock, wiping this phone"],
 ];
 
-/* The OOD guide lives in the repo as Markdown so it stays one document
-   rather than drifting into a second copy inside the app. That means it
-   needs signal, which is fine for something read at home the night before —
-   and the link says so, rather than dying silently on the beach. */
-export const GUIDE_URL = "https://github.com/cdbxyz/nsc-race-day/blob/main/GUIDE.md";
-
+/* The guide is a page in the app now, rendered from GUIDE.md itself, so this
+   works with no signal like everything else. */
 function guideLink() {
   return el("p.guideline", {}, [
     el("a.linkish", {
-      href: GUIDE_URL,
-      target: "_blank",
-      rel: "noopener",
+      href: "#/guide",
       text: "First time as OOD? Read the guide",
     }),
-    el("span.guidenote", { text: " — needs signal, so read it before you set off." }),
   ]);
 }
 

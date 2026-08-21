@@ -48,11 +48,17 @@ complete two-race day, kills the app mid-day, and brings the network back.
 
 ```
 serviceWorkerActive: true
-shellCached: 57
+shellPrecached: { of: 60, missing: [] }
 ```
 
-57 files precached — every script, font, icon and flag. If this number falls,
-something has dropped out of the shell list; run `npm run stamp`.
+Every file in `SHELL` is compared against what actually landed in the cache,
+after waiting for the worker to finish activating. `missing` must be empty —
+anything listed there is a file that will not be available offline.
+
+> Counting the cache before the worker has activated reports a number that is
+> simply wrong. It once read 47 of 60 and sent me looking for a precache
+> failure that did not exist, which is why the check now waits and names what
+> is missing rather than printing a bare total.
 
 ### 2. Cold start with the network off
 
@@ -160,6 +166,12 @@ drill, and **not one row was dropped**: all 88 stayed queued, and the app asked
 for the PIN instead of retrying silently forever.
 
 **Console errors across the whole drill: none.**
+
+> If you see `transaction failed` here, check the drill before the app: an
+> earlier version cleared the database out from under a running app, which
+> tore up the writes it makes on boot. It now deletes the database on a bare
+> page before the app loads, so the drill only reports faults an OOD could
+> actually meet.
 
 ---
 

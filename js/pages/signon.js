@@ -559,7 +559,7 @@ function entriesPanel(data) {
     );
   }
 
-  const next = el("button.btn", {
+  const next = el("button.btn.go", {
     type: "button",
     text: "Pre-race checklist →",
     onclick: () => navigate("checklist"),

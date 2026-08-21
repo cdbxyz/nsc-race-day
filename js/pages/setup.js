@@ -183,7 +183,7 @@ async function render() {
     newSeriesBlock.hidden = seriesPick.select.value !== "__new__";
   });
 
-  const start = el("button.btn", {
+  const start = el("button.btn.go", {
     type: "button",
     text: "Start race day",
     onclick: async () => {
