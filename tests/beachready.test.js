@@ -238,7 +238,7 @@ test("the home-screen icon is a real PNG, because iOS ignores SVG", async () => 
 test("the icons are precached, so an installed app is not blank offline", async () => {
   const sw = await readFile(new URL("../sw.js", import.meta.url), "utf8");
   assert.match(sw, /img\/apple-touch-icon\.png/);
-  assert.match(sw, /img\/nsc-logo\.svg/, "the mast logo too");
+  assert.match(sw, /img\/nsc-logo\.png/, "the club burgee on the mast too");
   assert.match(sw, /img\/flags\/class\.svg/, "and the start-sequence flags");
 });
 

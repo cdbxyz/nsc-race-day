@@ -10,7 +10,7 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "3a23f2245a08";
+const VERSION = "3cf25082a432";
 const SHELL = [
   "./",
   "./GUIDE.md",
@@ -32,7 +32,7 @@ const SHELL = [
   "./img/flags/start.svg",
   "./img/icon-192.png",
   "./img/icon-512.png",
-  "./img/nsc-logo.svg",
+  "./img/nsc-logo.png",
   "./index.html",
   "./js/app.js",
   "./js/backend.js",

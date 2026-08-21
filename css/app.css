@@ -656,7 +656,7 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 .windline{font-family:var(--mono);font-size:.78rem;color:var(--slate);font-variant-numeric:tabular-nums}
 
 /* ---- mast logo ----
-   40x40 box. Drop a real asset at img/nsc-logo.svg and nothing moves. */
+   40x40 box. Drop a real asset at img/nsc-logo.png and nothing moves. */
 .mast-home{
   display:flex;align-items:center;gap:10px;flex:1;min-width:0;
   /* 44px minimum like every other target: this is the way back to the
