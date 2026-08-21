@@ -9,6 +9,7 @@ import * as devmode from "./devmode.js";
 import * as device from "./device.js";
 import { entrySnapshot, seasonFor, winsForHelm, lapsFor } from "./handicap.js";
 import { cachedSeasonWins, lastRefreshedAt } from "./backend.js";
+import * as reg from "./registers.js";
 
 /** Races that have been published on this device, for the same-day rule. */
 const LOCAL_WINS_KEY = "local_published_wins";
@@ -304,93 +305,26 @@ export async function entriesForRace(raceId) {
 }
 
 /**
- * The combinations this club actually races: helm (+ crew) in a class, most
- * recently first. Derived from entry history rather than stored, so it is
- * always the truth about who has been sailing what.
- *
- * Identity is helm + crew + class: swapping crew makes a different
- * combination, because that is how the club thinks about it.
- *
- * @returns {Array<{key, helmId, crewId, classId, boatId, lastSeen}>}
- */
-export async function recentCombinations() {
-  const [entries, races] = await Promise.all([db.getAll("entries"), db.getAll("races")]);
-  const raceById = new Map(races.map((r) => [r.id, r]));
-
-  const byKey = new Map();
-  for (const entry of entries) {
-    if (!entry.class_id) continue;
-    const race = raceById.get(entry.race_id);
-    const when = String(race?.start_at ?? race?.sequence_start_at ?? "");
-    const key = `${entry.helm_id}|${entry.crew_id ?? ""}|${entry.class_id}`;
-    const existing = byKey.get(key);
-    if (!existing || when > existing.lastSeen) {
-      byKey.set(key, {
-        key,
-        helmId: entry.helm_id,
-        crewId: entry.crew_id ?? null,
-        classId: entry.class_id,
-        boatId: entry.boat_id ?? null,
-        lastSeen: when,
-      });
-    }
-  }
-
-  return [...byKey.values()].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
-}
-
-/** Boats that have raced, most recently first — the sign-on search order. */
-export async function boatsByRecentUse() {
-  const [entries, races] = await Promise.all([db.getAll("entries"), db.getAll("races")]);
-  const raceById = new Map(races.map((r) => [r.id, r]));
-  const lastSeen = new Map();
-  for (const entry of entries) {
-    const race = raceById.get(entry.race_id);
-    const when = race?.start_at ?? race?.sequence_start_at ?? null;
-    const previous = lastSeen.get(entry.boat_id);
-    if (!previous || String(when ?? "") > String(previous)) {
-      lastSeen.set(entry.boat_id, when ?? "");
-    }
-  }
-  return lastSeen;
-}
-
-/** The helm who last sailed this boat. */
-export async function lastKnownHelms() {
-  const [entries, races] = await Promise.all([db.getAll("entries"), db.getAll("races")]);
-  const raceById = new Map(races.map((r) => [r.id, r]));
-  const best = new Map();
-  for (const entry of entries) {
-    const race = raceById.get(entry.race_id);
-    const when = String(race?.start_at ?? race?.sequence_start_at ?? "");
-    const current = best.get(entry.boat_id);
-    if (!current || when > current.when) {
-      best.set(entry.boat_id, { helmId: entry.helm_id, when });
-    }
-  }
-  return new Map([...best].map(([boatId, v]) => [boatId, v.helmId]));
-}
-
-/**
- * Sign a boat on. The PY, factor and fleet are snapshotted here and never
- * recomputed, so a published result never shifts under a later win.
- */
-/**
  * Sign a combination on.
  *
- * The class is what matters — that is where the PY comes from. A hull is
- * optional, because most boats here are identified by who is sailing them.
- * Crew is optional even in a double-hander: sailing one short is normal.
+ * The class is what matters — that is where the PY comes from. Crew is
+ * optional even in a double-hander, because sailing one short is normal. The
+ * sail number is optional and belongs to THIS race: a helm may borrow a
+ * different boat next week, so it is a fact about the entry, not the person.
  *
  * The PY, factor and fleet are snapshotted here and never recomputed, so a
  * published result never shifts under a later win.
+ *
+ * Signing on also records the combination, which is what keeps the sign-on
+ * list honest without anybody maintaining it: a pairing nobody thought to
+ * write down appears in the register the moment it first races.
  */
 export async function addEntry({
   race,
   klass,
   helmId,
   crewId = null,
-  boat = null,
+  sailNo = "",
   context,
   factorOverride = null,
 }) {
@@ -404,18 +338,17 @@ export async function addEntry({
   if (existing.some((e) => e.helm_id === helmId)) {
     throw new Error("That helm is already signed on for this race.");
   }
-  if (boat && existing.some((e) => e.boat_id === boat.id)) {
-    throw new Error(`${boat.name ?? "That hull"} is already signed on.`);
-  }
 
   const wins = winsFor(helmId, context);
   const snap = entrySnapshot({ basePy: klass.base_py, wins, factorOverride });
+
+  const trimmedSail = String(sailNo ?? "").trim() || null;
 
   const row = {
     id: db.newId(),
     race_id: race.id,
     class_id: klass.id,
-    boat_id: boat?.id ?? null,
+    sail_no: trimmedSail,
     helm_id: helmId,
     // Crew is recorded for the tally and the result sheet; it has no bearing
     // on the handicap, which follows the helm alone.
@@ -426,6 +359,34 @@ export async function addEntry({
     fleet: snap.fleet,
     laps_override: null,
   };
+  await db.localWrite("entries", row);
+
+  /* After the entry, never before: the entry is the record that matters, and
+     a failure to update the register must not cost somebody their sign-on. */
+  try {
+    /* Read the race fresh for its start time. The page hands us the copy it
+       rendered with, which on a sign-on page predates the gun — the same
+       stale-spread trap that once reverted the wind. */
+    const current = (await db.get("races", race.id)) ?? race;
+    await reg.recordCombinationRaced({
+      helmId,
+      crewId: crewId || null,
+      classId: klass.id,
+      sailNo: trimmedSail ?? "",
+      at: current.start_at ?? current.sequence_start_at ?? db.nowIso(),
+    });
+  } catch (err) {
+    console.warn("combination not recorded", err.message);
+  }
+
+  return row;
+}
+
+/** Change or clear an entry's sail number. Never touches the handicap. */
+export async function setEntrySailNo(entryId, sailNo) {
+  const entry = await db.get("entries", entryId);
+  if (!entry) throw new Error("That entry has gone.");
+  const row = { ...entry, sail_no: String(sailNo ?? "").trim() || null };
   await db.localWrite("entries", row);
   return row;
 }
@@ -545,21 +506,20 @@ export async function carryForwardCandidates(race, context) {
     entriesForRace(race.id),
   ]);
 
-  const [boats, classes] = await Promise.all([db.getAll("boats"), db.getAll("classes")]);
-  const boatById = new Map(boats.map((b) => [b.id, b]));
-  const classById = new Map(classes.map((c) => [c.id, c]));
+  const classById = new Map((await db.getAll("classes")).map((c) => [c.id, c]));
 
   const signedOnHelms = new Set(alreadyHere.map((e) => e.helm_id));
 
   return previousEntries
     .filter((entry) => !signedOnHelms.has(entry.helm_id))
     .map((entry) => {
-      const boat = entry.boat_id ? boatById.get(entry.boat_id) ?? null : null;
       const klass = classById.get(entry.class_id) ?? null;
       const wins = winsFor(entry.helm_id, context);
       const basePy = klass?.base_py ?? entry.base_py;
       return {
-        boat,
+        // The number they sailed under last race is the obvious default for
+        // the next one on the same day.
+        sailNo: entry.sail_no ?? "",
         klass,
         helmId: entry.helm_id,
         crewId: entry.crew_id ?? null,

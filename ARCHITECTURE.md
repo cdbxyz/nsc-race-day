@@ -76,7 +76,7 @@ The dev fast clock covers the whole race, not just the sequence. It works by sca
 
 ### Sync engine mechanics
 
-Every mutation gets a client-generated UUID and goes to two places in one IndexedDB transaction: the local table and the `outbox`. The sync loop pushes outbox rows to Supabase as **upserts keyed on that UUID** — retries are therefore idempotent; a request that succeeded but whose response was lost does no harm when retried. Outbox rows are marked synced only on confirmed success. The UI shows a persistent, honest sync indicator: *all synced / N events waiting / offline*. Reference data (boat register, helm register, season results for handicaps) is pulled and cached in IndexedDB whenever online, with a "last refreshed" stamp visible at sign-on.
+Every mutation gets a client-generated UUID and goes to two places in one IndexedDB transaction: the local table and the `outbox`. The sync loop pushes outbox rows to Supabase as **upserts keyed on that UUID** — retries are therefore idempotent; a request that succeeded but whose response was lost does no harm when retried. Outbox rows are marked synced only on confirmed success. The UI shows a persistent, honest sync indicator: *all synced / N events waiting / offline*. Reference data (members, classes, combinations, the season programme and season results for handicaps) is pulled and cached in IndexedDB whenever online, with a "last refreshed" stamp visible at sign-on.
 
 ### Crash/sleep/reload recovery
 
@@ -102,14 +102,24 @@ create table classes (
   created_at timestamptz default now()
 );
 
-create table boats (
+-- There is no boats table. Named hulls were dropped in 017: they added a
+-- decision at every sign-on for a club that thinks in pairings, and every row
+-- ended up inactive with no entry pointing at one. The sail number an OOD
+-- actually needs lives on the entry, because it is a fact about that race.
+
+create table combinations (
   id uuid primary key,
-  name text not null,              -- boat name or sail number
-  sail_no text,
-  class_id uuid references classes not null,   -- boat inherits the class base PY
-  active boolean default true,
+  helm_id uuid references helms not null,
+  crew_id uuid references helms,   -- null = solo, a DIFFERENT pairing
+  class_id uuid references classes not null,   -- where the PY comes from
+  default_sail_no text,            -- pre-filled at sign-on, editable per race
+  times_raced int not null default 0,          -- maintained by addEntry
+  last_raced timestamptz,
+  active boolean not null default true,        -- retire, never delete
   created_at timestamptz default now()
 );
+-- Null crew is a VALUE, not a missing field, so the unique index coalesces it:
+--   (helm_id, coalesce(crew_id, nil-uuid), class_id)
 
 create table race_days (
   id uuid primary key,
@@ -146,14 +156,16 @@ create table races (
 create table entries (
   id uuid primary key,
   race_id uuid references races not null,
-  boat_id uuid references boats not null,
+  class_id uuid references classes not null,   -- where the PY comes from
   helm_id uuid references helms not null,
+  crew_id uuid references helms,   -- optional even in a double-hander
+  sail_no text,                    -- THIS race only; a helm may borrow a boat
   base_py int not null,            -- snapshot of class base PY at entry time
   handicap_factor numeric not null default 1.0,  -- 1.0 / .97 / .96 / .95
   personal_py numeric not null,    -- base_py × factor, the PY actually used
   fleet text not null,             -- 'fast' (base PY < 1168) | 'slow' (>= 1168)
   laps_override int,               -- per-boat exception to the fleet lap plan
-  unique (race_id, boat_id)
+  unique (race_id, helm_id)        -- a helm sails one boat per race
 );
 
 create table race_events (
@@ -212,7 +224,7 @@ Direct port of the proven calculator logic into a pure, dependency-free `scoring
 
 **0 — Race day setup.** Date (defaults today), OOD / RO1 / RO2 names (recent names suggested), pick or create the series, number of races planned. If an unfinished race day exists locally, the resume banner takes over the top of this screen.
 
-**1 — Sign-on.** Search-as-you-type over the cached boat register, most-recently-raced first; one tap adds boat + last-known helm, with helm changeable per entry. New boats/helms creatable inline (name, class, PY). Each card shows class, base PY, helm, win badge, applied personal PY (e.g. "Hamish · Laser 2000 · 1122 × 0.97 = 1088 (1 win)"), and fleet — fast (base PY below 1168, 3 laps by default) or slow (1168 and above, 2 laps) — with a per-boat lap override for oddities. Race setup carries the lap plan itself (fast/slow lap counts, defaulting 3/2). This list is the day's tally record. Late entries can be added even mid-race (they'll have started with the fleet).
+**1 — Sign-on.** The full club combinations register, most-raced first then most-recent, with search-as-you-type over helm, crew, class or sail number; one tap signs a pairing on and pre-fills its usual sail number, editable per race. New combinations creatable inline through pickers (class, helm, crew) plus a free-text sail number. Because combinations are a real table pulled down with the reference data, a rotating OOD on a phone that has never run a race sees the whole club list offline — the derived version was empty on the first morning of the fortnight. Each card shows class, base PY, helm, win badge, applied personal PY (e.g. "Hamish · Laser 2000 · 1122 × 0.97 = 1088 (1 win)"), and fleet — fast (base PY below 1168, 3 laps by default) or slow (1168 and above, 2 laps) — with a per-boat lap override for oddities. Race setup carries the lap plan itself (fast/slow lap counts, defaulting 3/2). This list is the day's tally record. Late entries can be added even mid-race (they'll have started with the fleet).
 
 **2 — Pre-race checklist.** Template-driven (editable in Supabase without code changes): rescue boat prepped and fuelled, radios checked, first aid aboard, flags ready, tide/weather noted, etc. Each item is a large toggle stamped with time. Completable offline. A "proceed anyway" path exists but flags the run as incomplete — the OOD stays in charge, the record stays honest.
 
@@ -220,7 +232,7 @@ Direct port of the proven calculator logic into a pure, dependency-free `scoring
 
 **4 — Live race.** The heart of it. A grid of boat cards, sized so ~8 fit a phone screen without scrolling. Each card: boat name, helm, lap progress ("2 of 3") and each crossing as elapsed race time ("L1 4:12 · L2 8:23", becoming "L1 4:12 · L2 8:23 · F 12:41" on finishing), and one big explicit button that walks the boat through its race — **Lap 1 → Lap 2 → Finish** — becoming **Finish** on the boat's planned final lap, so the last crossing is a single tap and no boat can be given a lap it isn't due. No long-press gestures anywhere. A small **⋯** on each card opens the secondary sheet: OCS · RET · DNF · DSQ · undo this boat's last event. Finishing moves the boat to a "finished" rail at the top with its elapsed time, keeping the still-racing fleet prominent. A global **Undo** reverses the last event (appending `event_undone`); an event history drawer allows undoing any specific mistake. Race clock and sync indicator pinned top. Two race-level actions behind a two-step confirm: **Shorten course** — set new fast/slow lap counts (e.g. 3/2 → 2/1); by convention this is raised before any boat reaches the shortened finish, so still-racing boats simply see their button become Finish (or remaining laps reduce) and already-finished boats are untouched, with no retroactive logic — and **Abandon race**, which produces no results but preserves the sign-on for a resail.
 
-**5 — Results.** Scoring engine output in the familiar results table: position, boat, helm, PY (base × factor), laps, elapsed, lap-adjusted, corrected, points, behind-leader. Correction affordances before publishing (adjust laps/elapsed/code — each an auditable `correction` event). **Publish** freezes the race, makes it publicly readable, and feeds the win into the handicap view. Copy / PDF / print as today. Then: **Next race →** loops back to sign-on with the entry list carried forward (drop-outs deselectable), or onward to stand-down.
+**5 — Results.** Scoring engine output in the familiar results table: position, sail number (column dropped entirely when nobody in the race has one), helm, class, PY (base × factor), laps, elapsed, lap-adjusted, corrected, points, behind-leader. Correction affordances before publishing (adjust laps/elapsed/code — each an auditable `correction` event). **Publish** freezes the race, makes it publicly readable, and feeds the win into the handicap view. Copy / PDF / print as today. Then: **Next race →** loops back to sign-on with the entry list carried forward (drop-outs deselectable), or onward to stand-down.
 
 **6 — Stand-down.** Opens with the auto-generated tally check: every signed-on boat listed as *finished / coded / **unaccounted***, and unaccounted boats blocking completion in red — this is the safety net, generated from data rather than memory. Then the stand-down template (rescue boat recovered, refuelled, radios stowed, incidents to report — free-text incident note feeding the club's RNLI-clinic agenda). Completing it closes the race day and pushes any final unsynced events.
 
@@ -234,7 +246,7 @@ Direct port of the proven calculator logic into a pure, dependency-free `scoring
 
 ## 9. Auth & RLS summary
 
-`pin-auth` Edge Function: club PIN in → session for the shared club account out; PIN lives in Supabase secrets, rotatable by the committee without redeploying. RLS: authenticated role can insert/update everything; anon role can select only `races` where `status = 'published'` plus their entries, events-derived results view, and the series tables. The boat/helm registers are readable to authenticated only (names of members ≠ public data — worth keeping GDPR-tidy given the club now holds a member-ish database).
+`pin-auth` Edge Function: club PIN in → session for the shared club account out; PIN lives in Supabase secrets, rotatable by the committee without redeploying. RLS: authenticated role can insert/update everything; anon role can select only `races` where `status = 'published'` plus their entries, events-derived results view, and the series tables. The member, class and combination registers are readable to authenticated only (names of members ≠ public data — worth keeping GDPR-tidy given the club now holds a member-ish database).
 
 ---
 
@@ -272,7 +284,7 @@ New repo, keeping `nsc-race-calc` live untouched as the standalone tool (it rema
 
 1. **Foundations** — repo, PWA shell, design system port, IndexedDB + outbox + sync engine with fake backend, resume-on-load. *The risky plumbing first, testable without Supabase.*
 2. **Supabase** — project, schema, RLS, pin-auth function, sync engine pointed at the real thing.
-3. **Registers & setup** — boats, helms, race day setup, sign-on page, handicap engine + view.
+3. **Registers & setup** — members, classes, combinations, race day setup, sign-on page, handicap engine + view.
 4. **Race running** — checklists, start sequence timer, live race page, event log + undo.
 5. **Results & stand-down** — scoring port, corrections, publish, PDF/CSV/print, tally check, stand-down, next-race loop.
 6. **Hardening** — offline drills (airplane-mode race day end-to-end), wake lock, iOS Safari quirks, OOD one-pager guide, dry run on the actual beach.

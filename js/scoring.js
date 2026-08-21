@@ -51,6 +51,7 @@ export function scoreRace(boats = [], { lapMode = true } = {}) {
 
     const row = {
       id: boat.id,
+      // The combination — there are no hulls to take a name from.
       name: (boat.name ?? "").trim(),
       klass: (boat.klass ?? "").trim(),
       helm: (boat.helm ?? "").trim(),

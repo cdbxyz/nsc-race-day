@@ -13,7 +13,7 @@ import * as db from "./db.js";
 const TABLE_ORDER = [
   "classes",
   "helms",
-  "boats",
+  "combinations",
   "series",
   "race_days",
   "races",
@@ -91,7 +91,17 @@ export const supabaseBackend = createSupabaseBackend({
  * none of it bounces straight back up the outbox.
  * ------------------------------------------------------------------------ */
 
-const REFERENCE_TABLES = ["classes", "boats", "helms", "checklist_templates", "race_calendar"];
+/* Pulled down on sign-in so every phone has the club-wide registers offline.
+   `combinations` is here for the reason the table exists at all: a rotating
+   OOD on a phone that has never run a race must still see the pairings this
+   club races, on the first morning of the fortnight. */
+const REFERENCE_TABLES = [
+  "classes",
+  "helms",
+  "combinations",
+  "checklist_templates",
+  "race_calendar",
+];
 
 export const LAST_REFRESHED_KEY = "reference_last_refreshed";
 

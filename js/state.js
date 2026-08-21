@@ -211,35 +211,28 @@ export function raceName(race) {
 /* ---------------------------------------------------------------------------
  * Identifying an entry
  *
- * Most boats at this club have no name. What persists is the combination: a
- * helm, sometimes a crew, in a class. So an entry is labelled by whoever is
- * sailing it, unless there is a real named hull — in which case the hull
- * leads, because that is what people will call it.
+ * There are no named hulls here — 017 removed them. What persists at this club
+ * is the combination: a helm, sometimes a crew, in a class. So an entry is
+ * always labelled by whoever is sailing it, and the sail number is supporting
+ * detail: it identifies the boat on the water, not the people in it.
  * ------------------------------------------------------------------------ */
 
-/** "Vaila", or "Hamish Fowler + Lisa Brown", or "Hamish Fowler". */
-export function entryLabel({ boat = null, helm = null, crew = null } = {}) {
-  const hull = String(boat?.name ?? "").trim();
-  if (hull) return hull;
+/** "Hamish Fowler + Lisa Fowler", or "Hamish Fowler". */
+export function entryLabel({ helm = null, crew = null } = {}) {
   const people = [helm?.name, crew?.name].map((n) => String(n ?? "").trim()).filter(Boolean);
   return people.join(" + ") || "unknown";
 }
 
 /**
- * The second line: who is sailing (when the hull led), the class, and the
- * sail number if there is one. Never repeats what entryLabel already said.
+ * The second line: the class, and the sail number when there is one.
+ * "Laser 2000 · 2298". Never repeats what entryLabel already said.
+ *
+ * The sail number comes off the ENTRY, because it is a fact about this race —
+ * a helm may borrow a different boat next week.
  */
-export function entryDetail({ boat = null, helm = null, crew = null, klass = null } = {}) {
-  const hull = String(boat?.name ?? "").trim();
-  const people = [helm?.name, crew?.name].map((n) => String(n ?? "").trim()).filter(Boolean);
-  const sailNo = String(boat?.sail_no ?? "").trim();
-  return [
-    hull ? people.join(" + ") : null, // only if the hull took the first line
-    klass?.name ?? null,
-    sailNo || null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+export function entryDetail({ entry = null, klass = null, sailNo = null } = {}) {
+  const number = String(sailNo ?? entry?.sail_no ?? "").trim();
+  return [klass?.name ?? null, number || null].filter(Boolean).join(" · ");
 }
 
 /** Everyone aboard, for the stand-down tally. */

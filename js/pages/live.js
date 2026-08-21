@@ -73,10 +73,9 @@ async function load() {
   const race = await rd.currentRace(raceDay.id);
   if (!race) return (context = null);
 
-  const [events, entries, boats, members, classes] = await Promise.all([
+  const [events, entries, members, classes] = await Promise.all([
     log.eventsForRace(race.id),
     rd.entriesForRace(race.id),
-    db.getAll("boats"),
     db.getAll("helms"),
     db.getAll("classes"),
   ]);
@@ -86,7 +85,6 @@ async function load() {
     race,
     events,
     entries,
-    boatById: new Map(boats.map((b) => [b.id, b])),
     helmById: new Map(members.map((h) => [h.id, h])),
     classById: new Map(classes.map((c) => [c.id, c])),
     /* The fast clock runs the whole race, not just the sequence: the same
@@ -437,7 +435,7 @@ function boatCard(boat) {
 /** The people, hull and class behind an entry, for display. */
 function entryParts(entry) {
   return {
-    boat: entry.boat_id ? context.boatById.get(entry.boat_id) ?? null : null,
+    entry,
     helm: context.helmById.get(entry.helm_id) ?? null,
     crew: entry.crew_id ? context.helmById.get(entry.crew_id) ?? null : null,
     klass: context.classById.get(entry.class_id) ?? null,

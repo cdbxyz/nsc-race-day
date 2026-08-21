@@ -56,12 +56,14 @@ async function load() {
   const season = rd.seasonForRace({ ...race, race_date: raceDay.date }, series);
   const context = await rd.handicapContext(season);
 
-  const [entries, boats, members, classes, combinations] = await Promise.all([
+  const [entries, members, classes, combinations] = await Promise.all([
     rd.entriesForRace(race.id),
-    reg.listBoats(),
     reg.listMembers(),
     reg.listClasses(),
-    rd.recentCombinations(),
+    /* The club-wide register, not this phone's history. A rotating OOD on a
+       phone that has never run a race sees every pairing the club races,
+       because these are pulled down with the other reference data. */
+    reg.listCombinations(),
   ]);
 
   return {
@@ -71,12 +73,10 @@ async function load() {
     season,
     context,
     entries,
-    boats,
     members,
     helms: members,
     classes,
     combinations,
-    boatById: new Map(boats.map((b) => [b.id, b])),
     helmById: new Map(members.map((h) => [h.id, h])),
     classById: new Map(classes.map((c) => [c.id, c])),
     claim: await device.claimState(raceDay),
@@ -160,7 +160,7 @@ async function carryForwardPanel(data) {
   for (const candidate of candidates) {
     const helm = data.helmById.get(candidate.helmId);
     const crew = candidate.crewId ? data.helmById.get(candidate.crewId) : null;
-    const parts = { boat: candidate.boat, helm, crew, klass: candidate.klass };
+    const parts = { helm, crew, klass: candidate.klass, sailNo: candidate.sailNo };
     const toggle = el("input", {
       type: "checkbox",
       checked: true,
@@ -197,7 +197,7 @@ async function carryForwardPanel(data) {
             klass: candidate.klass,
             helmId: candidate.helmId,
             crewId: candidate.crewId,
-            boat: candidate.boat,
+            sailNo: candidate.sailNo,
             context: data.context,
           });
         } catch (err) {
@@ -237,7 +237,7 @@ function searchPanel(data) {
   const box = el("input.searchbox", {
     type: "search",
     value: search,
-    placeholder: "Search helm, crew or class…",
+    placeholder: "Search helm, crew, class or sail no…",
     "aria-label": "Search combinations",
     autocomplete: "off",
     oninput: (event) => {
@@ -254,25 +254,20 @@ function searchPanel(data) {
     clear(matches);
     const needle = search.trim().toLowerCase();
 
+    /* ALL of them, already sorted most-frequent then most-recent by the
+       register. Deliberately not truncated: on the first morning of the
+       fortnight the whole club signs on, and a list that stops at twelve
+       sends the OOD to the manual form for people who are right there. */
     const rows = data.combinations
-      .map((combo) => {
-        const helm = data.helmById.get(combo.helmId) ?? null;
-        const crew = combo.crewId ? data.helmById.get(combo.crewId) ?? null : null;
-        const klass = data.classById.get(combo.classId) ?? null;
-        const boat = combo.boatId ? data.boatById.get(combo.boatId) ?? null : null;
-        return { combo, helm, crew, klass, boat };
-      })
-      .filter((row) => row.helm && row.klass)
-      .filter((row) => !signedOnHelms.has(row.combo.helmId))
+      .filter((row) => !signedOnHelms.has(row.helm_id))
       .filter((row) => {
         if (!needle) return true;
-        // Helm OR crew OR class, because any of the three is how someone
-        // would think to look for a combination.
-        return [row.helm?.name, row.crew?.name, row.klass?.name, row.boat?.name]
+        // Helm OR crew OR class OR sail number — any of the four is how
+        // somebody would think to look for a combination.
+        return [row.helm?.name, row.crew?.name, row.klass?.name, row.default_sail_no]
           .filter(Boolean)
-          .some((text) => text.toLowerCase().includes(needle));
-      })
-      .slice(0, 12);
+          .some((text) => String(text).toLowerCase().includes(needle));
+      });
 
     if (!rows.length) {
       matches.append(
@@ -281,8 +276,8 @@ function searchPanel(data) {
             text: needle
               ? `Nothing matching “${search}”. Use “New combination” below.`
               : data.combinations.length
-                ? "Everyone who has raced before is signed on."
-                : "No combinations yet — use “New combination” below.",
+                ? "Every combination in the register is signed on."
+                : "No combinations in the register yet — use “New combination” below.",
           }),
         ])
       );
@@ -297,7 +292,14 @@ function searchPanel(data) {
         }, [
           el("div.regmain", {}, [
             el("div.regname", { text: entryLabel(row) }),
-            el("div.regmeta", { text: entryDetail(row) || row.klass.name }),
+            el("div.regmeta", {
+              text: [
+                entryDetail({ klass: row.klass, sailNo: row.default_sail_no }),
+                racedNote(row),
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            }),
           ]),
           el("span.addmark", { text: "+", "aria-hidden": "true" }),
         ])
@@ -322,15 +324,23 @@ function searchPanel(data) {
   return panel("Add a boat", children, { count: `${data.entries.length} signed on` });
 }
 
+/** "raced 12 times" — why this pairing is near the top of the list. */
+function racedNote(row) {
+  const times = row.times_raced ?? 0;
+  if (!times) return "new";
+  return times === 1 ? "raced once" : `raced ${times} times`;
+}
+
 async function signOnCombination(data, row, container) {
   container.querySelectorAll(".notice").forEach((n) => n.remove());
   try {
     await rd.addEntry({
       race: data.race,
       klass: row.klass,
-      helmId: row.combo.helmId,
-      crewId: row.combo.crewId,
-      boat: row.boat,
+      helmId: row.helm_id,
+      crewId: row.crew_id ?? null,
+      // Pre-filled from the register, editable per race on the entry card.
+      sailNo: row.default_sail_no ?? "",
       context: data.context,
     });
     search = "";
@@ -353,8 +363,11 @@ async function signOnCombination(data, row, container) {
  * second time as "hamish" or as somebody's email address. Every duplicate is a
  * split handicap history, which is the one thing this app must not get wrong.
  *
- * So each of class, helm, crew and hull is a picker: filter-as-you-type over
- * what already exists, with adding something new as a deliberate, separate tap.
+ * So each of class, helm and crew is a picker: filter-as-you-type over what
+ * already exists, with adding something new as a deliberate, separate tap.
+ * The sail number is the one free-text box here, and legitimately so: it is a
+ * number read off a sail, not a register entity, and it cannot create a
+ * duplicate of anything.
  */
 function newCombinationForm(data) {
   const body = el("div.panel-body.subform");
@@ -365,7 +378,6 @@ function newCombinationForm(data) {
   let classId = null;
   let helmId = null;
   let crewId = null;
-  let boatId = null;
   let newHelmName = "";
   let newCrewName = "";
 
@@ -434,30 +446,14 @@ function newCombinationForm(data) {
   });
   const crewBlock = el("div", { hidden: true }, [crewPick.node]);
 
-  /* Hulls are optional and belong to a class, so the list narrows once a
-     class is chosen — an OOD should not scroll past every Laser to find a
-     Wayfarer's sail number. */
-  const boatPick = pickerField("Sail number (optional)", {
-    placeholder: "No hull recorded",
-    items: [],
-    addLabel: "New sail number…",
-    onPick: (item) => {
-      boatId = item.row?.id ?? null;
-      newSail.input.value = "";
-      newSailBlock.hidden = true;
-      boatPick.set(item.row ? boatLabel(item.row) : null);
-    },
-    onAddNew: (text) => {
-      boatId = null;
-      newSailBlock.hidden = false;
-      newSail.input.value = text;
-      boatPick.set(text || "New sail number…");
-    },
+  /* Free text, and the only one on this form. A sail number is read off a
+     sail; it is not a register entity and cannot duplicate anybody. */
+  const sailNo = field("Sail number (optional)", {
+    class: "text",
+    autocomplete: "off",
+    inputMode: "numeric",
+    placeholder: "e.g. 2298",
   });
-  const newSail = field("Sail number", { class: "text", autocomplete: "off" });
-  const newSailBlock = el("div.subform", { hidden: true }, [newSail.node]);
-
-  const boatLabel = (b) => [b.sail_no, b.name].filter(Boolean).join(" · ") || "(unnamed hull)";
 
   /* The crew field appears only for a double-hander — but stays optional,
      because sailing a two-man boat single-handed is perfectly normal. */
@@ -465,13 +461,6 @@ function newCombinationForm(data) {
     const chosen = classId ? data.classById.get(classId) : null;
     const crewSize = chosen ? Number(chosen.crew_size ?? 1) : Number(newClassCrew.select.value);
     crewBlock.hidden = crewSize !== 2;
-
-    boatPick.setItems([
-      { label: "— no hull —", row: null },
-      ...data.boats
-        .filter((b) => !classId || b.class_id === classId)
-        .map((b) => ({ label: boatLabel(b), row: b })),
-    ]);
   }
   newClassCrew.select.addEventListener("change", syncForClass);
   if (!data.classes.length) {
@@ -509,23 +498,14 @@ function newCombinationForm(data) {
           else if (newCrewName.trim()) crew = await reg.createMember({ name: newCrewName });
         }
 
-        // A hull is only recorded when there is one worth recording.
-        let boat = null;
-        if (boatId) boat = await db.get("boats", boatId);
-        else if (newSail.input.value.trim()) {
-          boat = await reg.createBoat({
-            name: "",
-            sailNo: newSail.input.value.trim(),
-            classId: chosenClassId,
-          });
-        }
-
+        /* addEntry records the combination itself, so a pairing created
+           here is in the register for every phone from its first race. */
         await rd.addEntry({
           race: data.race,
           klass: klassRow,
           helmId: helm.id,
           crewId: crew?.id ?? null,
-          boat,
+          sailNo: sailNo.input.value,
           context: data.context,
         });
         showAddBoat = false;
@@ -540,7 +520,7 @@ function newCombinationForm(data) {
   body.append(
     classPick.node, newClassBlock,
     helmPick.node, crewBlock,
-    boatPick.node, newSailBlock,
+    sailNo.node,
     el("div.actions", {}, [create])
   );
   return body;
@@ -559,7 +539,7 @@ function entriesPanel(data) {
   const list = el("div.entrylist");
 
   const partsFor = (entry) => ({
-    boat: entry.boat_id ? data.boatById.get(entry.boat_id) ?? null : null,
+    entry,
     helm: data.helmById.get(entry.helm_id) ?? null,
     crew: entry.crew_id ? data.helmById.get(entry.crew_id) ?? null : null,
     klass: data.classById.get(entry.class_id) ?? null,
@@ -600,7 +580,7 @@ function entriesPanel(data) {
 
 function entryCard(data, entry) {
   const parts = {
-    boat: entry.boat_id ? data.boatById.get(entry.boat_id) ?? null : null,
+    entry,
     helm: data.helmById.get(entry.helm_id) ?? null,
     crew: entry.crew_id ? data.helmById.get(entry.crew_id) ?? null : null,
     klass: data.classById.get(entry.class_id) ?? null,
@@ -643,6 +623,21 @@ function entryCard(data, entry) {
 
 function entryEditor(data, entry, wins, parts) {
   const wrap = el("div.editorgrid");
+
+  /* Per race, not per person: the register remembers what this pairing
+     usually sails, and this is where a borrowed boat gets recorded without
+     rewriting that. Committed on blur so a half-typed number is never saved. */
+  const sailBox = field("Sail number", {
+    class: "text",
+    autocomplete: "off",
+    inputMode: "numeric",
+    value: entry.sail_no ?? "",
+    placeholder: "none recorded",
+  });
+  sailBox.input.addEventListener("change", async () => {
+    await rd.setEntrySailNo(entry.id, sailBox.input.value);
+    await render();
+  });
 
   const helmPick = selectField(
     "Helm",
@@ -709,7 +704,7 @@ function entryEditor(data, entry, wins, parts) {
     wrap.append(crewPick.node);
   }
 
-  wrap.append(helmPick.node, factorPick.node, lapsBox.node);
+  wrap.append(sailBox.node, helmPick.node, factorPick.node, lapsBox.node);
 
   /* Removal disappears once the race exists on the water: from then on the
      sign-on list is the tally record, and a boat that was there must stay

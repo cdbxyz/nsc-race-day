@@ -16,8 +16,8 @@ rather than the browser is what lets it work with no signal, and Nefyn has no
 signal worth relying on.
 
 **Sign in once, at home, on wifi.** Open the app and enter the club PIN. This
-pulls down the boat and member lists so they are on your phone before you need
-them. Ask the committee for the PIN if you do not have it.
+pulls down the club's members, classes and regular pairings so they are on
+your phone before you need them. Ask the committee for the PIN if you do not have it.
 
 ---
 
@@ -37,9 +37,17 @@ its name. Tap **Start race day**.
 
 Add every boat that is going out.
 
-Anyone who has raced before is one tap under the search box. For someone new,
-tap **New combination** and pick their class, then the helm, then the crew if
-there is one.
+The club's regular pairings are all listed, the ones who race most often at
+the top. **One tap signs somebody on.** The search box narrows the list — type
+a helm, a crew, a class or a sail number.
+
+Each pairing remembers the sail number it usually races under, and that goes
+on automatically. If someone has borrowed a different boat today, tap **Edit**
+on their card and change the number — that only affects today's race.
+
+For a pairing that is not listed, tap **New combination** and pick their
+class, then the helm, then the crew if there is one. It joins the club list
+straight away, so nobody has to add them again next week.
 
 > **Pick from the list. Do not type a name that is already there.** If Hamish
 > is in the list, tap Hamish. Typing him in again makes a second Hamish, and

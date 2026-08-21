@@ -115,14 +115,33 @@ test("markOutboxAttempt records why a push failed", async () => {
 });
 
 test("bulkPut writes reference data without queueing it for sync", async () => {
-  // Boats pulled DOWN from Supabase must not be pushed straight back up.
-  await db.bulkPut("boats", [
-    { id: db.newId(), name: "Vaila", class_id: "c1", active: true },
-    { id: db.newId(), name: "Kestrel", class_id: "c1", active: true },
+  // Combinations pulled DOWN from Supabase must not be pushed straight back up.
+  await db.bulkPut("combinations", [
+    { id: db.newId(), helm_id: "h1", crew_id: null, class_id: "c1", active: true },
+    { id: db.newId(), helm_id: "h2", crew_id: "h1", class_id: "c1", active: true },
   ]);
 
-  assert.equal((await db.getAll("boats")).length, 2);
+  assert.equal((await db.getAll("combinations")).length, 2);
   assert.equal(await db.countOutbox(), 0);
+});
+
+test("an upgrade removes stores and indexes a previous version left behind", async () => {
+  /* A real phone arrives here holding a v2 database with a `boats` store and
+     an `entries` store indexed on boat_id. Both must go, and no row of race
+     data may be touched on the way. */
+  assert.ok(!db.TABLES.includes("boats"));
+
+  const id = db.newId();
+  await db.localWrite("entries", { id, race_id: "r1", helm_id: "h1", class_id: "c1" });
+
+  const raw = await db.openDB();
+  assert.ok(!raw.objectStoreNames.contains("boats"), "the dead store is gone");
+
+  const indexes = [...raw.transaction("entries", "readonly").objectStore("entries").indexNames];
+  assert.ok(!indexes.includes("by_boat"), "and the index on a column that no longer exists");
+  assert.ok(indexes.includes("by_race"), "while the one still in use survives");
+
+  assert.ok(await db.get("entries", id), "and the row is untouched");
 });
 
 test("indexes support the lookups resume and sign-on need", async () => {

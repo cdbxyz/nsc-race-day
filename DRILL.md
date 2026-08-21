@@ -73,10 +73,15 @@ exactly the condition the app exists for. Fixed, and now checked.
 phoneNamed:  "Chris Darcy-Burt's Mac"
 racesCreated: 2
 signedOn: 6
-outboxGrowingOffline: 17
+outboxGrowingOffline: 29
+combinationsSelfMaintained: { rows: 6, withSailNo: 6 }
 ```
 
 The outbox is *supposed* to grow. Rows waiting is the system working.
+
+`combinationsSelfMaintained` is the check that the register maintains itself:
+six boats signed on produced six combinations, each carrying the sail number
+it was signed on with, without anyone editing a register.
 
 ### 5. Start sequence and race 1
 
@@ -123,12 +128,12 @@ Handicaps recalculate from the race just published, offline, from local data.
 ### 8. Kill the app mid-day
 
 ```
-outboxSurvivedReload: { before: 70, after: 70 }
+outboxSurvivedReload: { before: 88, after: 88 }
 resumeBannerShown: true
 speedResetTo1x: 1
 ```
 
-70 rows before, 70 after. The resume banner offers the day back. The dev fast
+88 rows before, 88 after. The resume banner offers the day back. The dev fast
 clock is gone, as it must be after any reload.
 
 ### 9. Stand down, still offline
@@ -144,14 +149,14 @@ the app's data.
 ### 10. Network back
 
 ```
-pendingBeforeFlush: 70
+pendingBeforeFlush: 88
 syncNeedsPin: true
-nothingDroppedWithoutPin: 70
+nothingDroppedWithoutPin: 88
 authBarVisible: true
 ```
 
 The last two lines are the important ones. The session had expired during the
-drill, and **not one row was dropped**: all 70 stayed queued, and the app asked
+drill, and **not one row was dropped**: all 88 stayed queued, and the app asked
 for the PIN instead of retrying silently forever.
 
 **Console errors across the whole drill: none.**

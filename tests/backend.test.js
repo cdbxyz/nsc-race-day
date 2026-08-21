@@ -33,13 +33,13 @@ test("parents are pushed before children whatever order they were tapped in", as
     entry("entries", "en1"),
     entry("races", "r1"),
     entry("race_days", "d1"),
-    entry("boats", "b1"),
+    entry("combinations", "cm1"),
     entry("classes", "c1"),
   ]);
 
   assert.deepEqual(
     calls.map((c) => c.table),
-    ["classes", "boats", "race_days", "races", "entries", "race_events"]
+    ["classes", "combinations", "race_days", "races", "entries", "race_events"]
   );
 });
 

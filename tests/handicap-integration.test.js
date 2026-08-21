@@ -30,7 +30,10 @@ const SEASON = 2026;
 function fakeServer({ wins = [] } = {}) {
   const tables = {
     classes: [{ id: "c1", name: "Laser 2000", base_py: 1122 }],
-    boats: [{ id: "b1", name: "Vaila", class_id: "c1", active: true }],
+    combinations: [
+      { id: "cm1", helm_id: HAMISH, crew_id: null, class_id: "c1",
+        default_sail_no: "2298", times_raced: 4, last_raced: "2026-08-02T13:00:00Z", active: true },
+    ],
     helms: [{ id: HAMISH, name: "Hamish" }],
     checklist_templates: [],
     race_calendar: [{ id: "cal1", season: 2026, date: "2026-08-02", name: "Whitaker Cup", start_time: "14:00" }],
@@ -125,10 +128,10 @@ test("the real refresh writes every register plus the wins cache", async () => {
   const { counts } = await refreshWith(server);
 
   assert.deepEqual(counts, {
-    classes: 1, boats: 1, helms: 1, checklist_templates: 0, race_calendar: 1,
+    classes: 1, combinations: 1, helms: 1, checklist_templates: 0, race_calendar: 1,
     helm_season_wins: 1,
   });
-  assert.equal((await db.getAll("boats")).length, 1, "registers land in IndexedDB");
+  assert.equal((await db.getAll("combinations")).length, 1, "registers land in IndexedDB");
 
   // And the wins are readable by the engine that needs them.
   const wins = winsForHelm(HAMISH, SEASON, await cachedSeasonWins());

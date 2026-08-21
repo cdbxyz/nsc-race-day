@@ -21,13 +21,25 @@ Hard rules:
   templates and the like are seeded once; after first deploy the dashboard is
   the source of truth and a re-run must never replace an existing row. A
   seed that overwrites silently discards the committee's own wording.
-- **Boats are hulls, never crew pairings.** The identity that persists at
-  this club is the combination — helm (+ crew) in a class — not the boat.
-  An entry carries `class_id` (where the PY comes from), `helm_id`,
-  optional `crew_id`, and `boat_id` only when a real named hull exists.
-  `helms` is the members register for everyone: a person helms one week and
-  crews the next; there is no second people table. Handicap wins and factors
-  attach to the HELM alone, whoever is crewing.
+- **There are no hulls. The combination is the identity.** A `combinations`
+  row is helm (+ crew) in a class, and it is what persists at this club. An
+  entry carries `class_id` (where the PY comes from), `helm_id`, optional
+  `crew_id`, and optional `sail_no` — the number is a fact about THAT RACE,
+  because a helm may borrow a different boat next week. The boats table was
+  dropped in 017 and must not come back: it added a decision at every sign-on
+  and every row ended up unused. `helms` is the members register for
+  everyone: a person helms one week and crews the next; there is no second
+  people table. Handicap wins and factors attach to the HELM alone, whoever
+  is crewing.
+- **Combinations are a real table, not a derivation.** A derived list is
+  empty on the first morning of the fortnight, which is the busiest sign-on
+  of the year. They are committee-editable, pulled down with the other
+  reference data so a rotating OOD on a fresh phone sees the club's pairings
+  offline, and self-maintaining: `addEntry` upserts the combination, so one
+  nobody seeded still appears after its first race. Identity is
+  (helm, crew, class) with **null crew treated as a value** — solo and
+  crewed are different pairings, not one with a field missing. Retire, never
+  delete: the history belongs to the row.
 - The club is **Nefyn Sailing Club (never Netley)**. NSC expands to Nefyn
   Sailing Club everywhere it appears — UI copy, page titles, the PWA manifest,
   PDF and print headers, CSV exports. Check this whenever you write club-facing

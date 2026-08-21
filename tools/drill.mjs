@@ -89,13 +89,17 @@ await ev(`(async()=>{const reg=await ${M("registers")}, rd=await ${M("raceday")}
   const ctx=await rd.handicapContext(2026);
   const people=[["Hamish Fowler",fast],["Hannah Prichard",fast],["Gareth Lloyd",fast],
                 ["Sioned Wyn",slow],["Rhys Owen",slow],["Bethan Rowlands",slow]];
-  for(const [n,k] of people){ const h=await reg.createMember({name:n});
-    await rd.addEntry({race:races[0],klass:k,helmId:h.id,context:ctx}); }})()`);
+  let i=0;
+  for(const [n,k] of people){ i++; const h=await reg.createMember({name:n});
+    await rd.addEntry({race:races[0],klass:k,helmId:h.id,sailNo:String(1000+i),context:ctx}); }})()`);
 await ev(`location.hash="#/home"`); await sleep(300); await ev(`location.hash="#/signon"`); await sleep(1200);
 note("signedOn", await ev(`(async()=>{const rd=await ${M("raceday")};
   const d=await rd.openRaceDay(); const r=await rd.currentRace(d.id);
   return (await rd.entriesForRace(r.id)).length;})()`));
 note("outboxGrowingOffline", await ev(`${M("db")}.then(m=>m.countOutbox())`));
+note("combinationsSelfMaintained", await ev(`(async()=>{const reg=await ${M("registers")};
+  const c=await reg.listCombinations();
+  return {rows:c.length, withSailNo:c.filter(x=>x.default_sail_no).length};})()`));
 
 console.log("\n== 5. Checklist, sequence and race 1 on the 60x clock ==");
 await ev(`${M("devclock")}.then(m=>m.setSequenceSpeed(60))`);
@@ -144,7 +148,7 @@ await ev(`(async()=>{const rd=await ${M("raceday")}, lg=await ${M("raceevents")}
   const d=await rd.openRaceDay(); const r=await rd.currentRace(d.id);
   const ctx=await rd.handicapContext(2026);
   const cands=await rd.carryForwardCandidates(r,ctx);
-  for(const c of cands) await rd.addEntry({race:r,klass:c.klass,helmId:c.helmId,crewId:c.crewId,boat:c.boat,context:ctx});
+  for(const c of cands) await rd.addEntry({race:r,klass:c.klass,helmId:c.helmId,crewId:c.crewId,sailNo:c.sailNo,context:ctx});
   await lg.startSequence(r.id);
   const gun=Date.now();
   await rd.setRaceStatusIfEarlier(r,"racing",{start_at:new Date(gun).toISOString(),

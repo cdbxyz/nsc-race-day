@@ -4,12 +4,13 @@
  * sign-on so a visiting boat never has to send anyone back here mid-morning.
  */
 
-import { el, clear, field, selectField, panel, notice } from "./../ui.js";
+import { el, clear, field, selectField, panel, notice, pickerField } from "./../ui.js";
+import { entryLabel } from "./../state.js";
 import * as reg from "./../registers.js";
 import * as cal from "./../calendar.js";
 
 let host = null;
-let tab = "boats";
+let tab = "combinations";
 
 export default {
   title: "Registers",
@@ -30,14 +31,14 @@ async function render() {
 
   node.append(
     el("div.tabrow", {}, [
-      tabButton("boats", "Boats"),
+      tabButton("combinations", "Combinations"),
       tabButton("helms", "Helms"),
       tabButton("classes", "Classes"),
       tabButton("calendar", "Calendar"),
     ])
   );
 
-  if (tab === "boats") node.append(await boatsPanel());
+  if (tab === "combinations") node.append(await combinationsPanel());
   if (tab === "helms") node.append(await helmsPanel());
   if (tab === "classes") node.append(await classesPanel());
   if (tab === "calendar") node.append(await calendarPanel());
@@ -69,61 +70,192 @@ async function attempt(fn, container) {
   }
 }
 
-/* ---- boats -------------------------------------------------------------- */
+/* ---- combinations --------------------------------------------------------
+ *
+ * Staleness is SHOWN, never used to hide anything.
+ *
+ * A pairing that has not raced this season is still one tap from signing on —
+ * they may be standing on the beach right now, back after a year away, and an
+ * OOD who cannot find them will type a duplicate instead. So every active
+ * combination stays in the list and in the sign-on list; the ones that have
+ * not raced this season simply say so, in words, next to how often they have
+ * raced. The committee can retire a pairing deliberately, which is a decision
+ * rather than a side effect of not turning up.
+ * ----------------------------------------------------------------------- */
 
-async function boatsPanel() {
-  const [boats, classes] = await Promise.all([reg.listBoats(), reg.listClasses()]);
+let showRetired = false;
+
+function seasonNow() {
+  return new Date().getFullYear();
+}
+
+/** "raced 12 times · last raced Aug 2026", plus a flag when that is not this season. */
+function combinationMeta(row) {
+  const times = row.times_raced ?? 0;
+  const bits = [
+    row.klass ? `${row.klass.name} · PY ${row.klass.base_py}` : "no class",
+    row.default_sail_no || null,
+    times === 0 ? "never raced" : times === 1 ? "raced once" : `raced ${times} times`,
+  ];
+
+  if (row.last_raced) {
+    const when = new Date(row.last_raced);
+    bits.push(
+      `last ${when.toLocaleDateString(undefined, { month: "short", year: "numeric" })}`
+    );
+    if (when.getFullYear() < seasonNow()) bits.push("not this season");
+  }
+  if (row.active === false) bits.push("RETIRED");
+
+  return bits.filter(Boolean).join(" · ");
+}
+
+async function combinationsPanel() {
+  const [rows, members, classes] = await Promise.all([
+    reg.listCombinations({ includeRetired: showRetired }),
+    reg.listMembers(),
+    reg.listClasses(),
+  ]);
   const body = el("div.panel-body");
 
-  if (!classes.length) {
+  if (!classes.length || !members.length) {
     body.append(
-      notice("Add a class first — a boat takes its PY from its class.", "info")
+      notice(
+        "Add at least one class and one member first — a combination is a helm, in a class.",
+        "info"
+      )
     );
   } else {
-    const name = field("Boat name or sail number", { class: "text", autocomplete: "off" });
-    const sail = field("Sail number (optional)", { class: "text", autocomplete: "off" });
-    const klass = selectField(
-      "Class",
-      classes.map((c) => ({ value: c.id, label: `${c.name} · ${c.base_py}` }))
-    );
+    let helmId = null;
+    let crewId = null;
+    let classId = null;
+
+    /* Chosen, never typed — the same rule as sign-on. A duplicate member here
+       splits a handicap history exactly as one created on the beach would. */
+    const helmPick = pickerField("Helm", {
+      placeholder: "Choose a helm…",
+      items: members.map((m) => ({ label: m.name, row: m })),
+      onPick: (item) => {
+        helmId = item.row.id;
+        helmPick.set(item.row.name);
+      },
+    });
+
+    const crewPick = pickerField("Crew (optional)", {
+      placeholder: "Sailing solo",
+      items: [
+        { label: "— sailing solo —", row: null },
+        ...members.map((m) => ({ label: m.name, row: m })),
+      ],
+      onPick: (item) => {
+        crewId = item.row?.id ?? null;
+        crewPick.set(item.row?.name ?? null);
+      },
+    });
+
+    const classPick = pickerField("Class", {
+      placeholder: "Choose a class…",
+      items: classes.map((c) => ({
+        label: c.name,
+        detail: `PY ${c.base_py}${(c.crew_size ?? 1) === 2 ? " · 2 up" : ""}`,
+        row: c,
+      })),
+      onPick: (item) => {
+        classId = item.row.id;
+        classPick.set(`${item.row.name} · ${item.row.base_py}`);
+      },
+    });
+
+    const sail = field("Usual sail number (optional)", {
+      class: "text",
+      autocomplete: "off",
+      inputMode: "numeric",
+      placeholder: "e.g. 2298",
+    });
+
     const add = el("button.btn", {
       type: "button",
-      text: "Add boat",
+      text: "Add combination",
       onclick: () =>
         attempt(async () => {
-          await reg.createBoat({
-            name: name.input.value,
-            sailNo: sail.input.value,
-            classId: klass.select.value,
+          await reg.createCombination({
+            helmId,
+            crewId,
+            classId,
+            defaultSailNo: sail.input.value,
           });
         }, body),
     });
-    body.append(name.node, sail.node, klass.node, el("div.actions", {}, [add]));
+
+    body.append(
+      helmPick.node,
+      crewPick.node,
+      classPick.node,
+      sail.node,
+      el("div.actions", {}, [add])
+    );
   }
 
+  const toggle = el("button.btn.ghost", {
+    type: "button",
+    text: showRetired ? "Hide retired" : "Show retired",
+    onclick: () => {
+      showRetired = !showRetired;
+      render();
+    },
+  });
+
   const list = el("div.reglist");
-  for (const boat of boats) {
+  for (const row of rows) {
+    const number = field("Sail no.", {
+      class: "text",
+      autocomplete: "off",
+      inputMode: "numeric",
+      value: row.default_sail_no ?? "",
+      placeholder: "none",
+    });
+    number.input.addEventListener("change", () =>
+      attempt(
+        () => reg.updateCombination(row.id, { defaultSailNo: number.input.value }),
+        list
+      )
+    );
+
     list.append(
-      el("div.regrow", {}, [
+      el(`div.regrow${row.active === false ? ".retired" : ""}`, {}, [
         el("div.regmain", {}, [
-          el("div.regname", { text: boat.name }),
-          el("div.regmeta", {
-            text: [boat.sail_no, boat.klass ? `${boat.klass.name} · PY ${boat.klass.base_py}` : "no class"]
-              .filter(Boolean)
-              .join(" · "),
-          }),
+          el("div.regname", { text: entryLabel(row) }),
+          el("div.regmeta", { text: combinationMeta(row) }),
+          number.node,
         ]),
         el("button.kill", {
           type: "button",
-          text: "Retire",
-          onclick: () => attempt(() => reg.retireBoat(boat.id), list),
+          text: row.active === false ? "Restore" : "Retire",
+          onclick: () =>
+            attempt(
+              () =>
+                row.active === false
+                  ? reg.reviveCombination(row.id)
+                  : reg.retireCombination(row.id),
+              list
+            ),
         }),
       ])
     );
   }
-  if (!boats.length) list.append(el("div.empty", {}, [el("p", { text: "No boats yet." })]));
+  if (!rows.length) {
+    list.append(
+      el("div.empty", {}, [
+        el("p", {
+          text: "No combinations yet. Add the club's regular pairings here, or let them appear as people race.",
+        }),
+      ])
+    );
+  }
 
-  return panel("Boats", [body, list], { count: `${boats.length}` });
+  return panel("Combinations", [body, el("div.actions", {}, [toggle]), list], {
+    count: `${rows.length}`,
+  });
 }
 
 /* ---- helms -------------------------------------------------------------- */

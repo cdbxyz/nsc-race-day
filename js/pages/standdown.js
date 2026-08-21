@@ -44,10 +44,9 @@ export default {
  */
 async function tally(raceDay) {
   const races = await rd.racesForDay(raceDay.id);
-  const [boats, members, classes] = await Promise.all([
-    db.getAll("boats"), db.getAll("helms"), db.getAll("classes"),
+  const [members, classes] = await Promise.all([
+    db.getAll("helms"), db.getAll("classes"),
   ]);
-  const boatById = new Map(boats.map((b) => [b.id, b]));
   const helmById = new Map(members.map((h) => [h.id, h]));
   const classById = new Map(classes.map((c) => [c.id, c]));
 
@@ -75,7 +74,7 @@ async function tally(raceDay) {
             : { status: "unaccounted", statusLabel: "not accounted for" };
 
       const parts = {
-        boat: entry.boat_id ? boatById.get(entry.boat_id) ?? null : null,
+        entry,
         helm: helmById.get(entry.helm_id) ?? null,
         crew: entry.crew_id ? helmById.get(entry.crew_id) ?? null : null,
         klass: classById.get(entry.class_id) ?? null,

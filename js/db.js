@@ -13,14 +13,13 @@
 import { isQuotaError, noteQuotaError, clearQuotaError } from "./storage.js";
 
 const DB_NAME = "nsc-race-day";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /* Table stores mirror the Supabase schema in ARCHITECTURE.md section 4.
    Everything here is keyed on a client-generated UUID, which is also the
    upsert key on the server — that is what makes sync retries idempotent. */
 export const TABLES = [
   "classes",
-  "boats",
   "helms",
   "race_days",
   "series",
@@ -30,16 +29,17 @@ export const TABLES = [
   "checklist_templates",
   "checklist_runs",
   "race_calendar",
+  "combinations",
 ];
 
 const INDEXES = {
-  boats: { by_class: "class_id" },
   race_days: { by_status: "status" },
   races: { by_race_day: "race_day_id", by_status: "status" },
-  entries: { by_race: "race_id", by_boat: "boat_id" },
+  entries: { by_race: "race_id" },
   race_events: { by_race: "race_id", by_occurred_at: "occurred_at" },
   checklist_runs: { by_race_day: "race_day_id" },
   race_calendar: { by_season: "season", by_date: "date" },
+  combinations: { by_helm: "helm_id", by_class: "class_id" },
 };
 
 /* Test seam. Tests set beforeCommit to make the transaction fail after both
@@ -54,8 +54,10 @@ export function openDB() {
   dbPromise = new Promise((resolve, reject) => {
     // Read indexedDB at call time, not import time, so tests can substitute it.
     const req = globalThis.indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
+      const tx = req.transaction;
+
       for (const table of TABLES) {
         if (db.objectStoreNames.contains(table)) continue;
         const store = db.createObjectStore(table, { keyPath: "id" });
@@ -63,6 +65,29 @@ export function openDB() {
           store.createIndex(name, keyPath);
         }
       }
+
+      /* An upgrade must also REMOVE what a previous version left behind, or a
+         phone that has been through v2 keeps a dead `boats` store forever and
+         an `entries` store still indexed on a column that no longer exists.
+         Only shapes are touched here — never a row of race data, which is why
+         the outbox and meta stores are exempt and why nothing is cleared. */
+      for (const name of [...db.objectStoreNames]) {
+        if (name === "outbox" || name === "meta") continue;
+        if (!TABLES.includes(name)) db.deleteObjectStore(name);
+      }
+
+      for (const table of TABLES) {
+        if (!db.objectStoreNames.contains(table)) continue;
+        const store = tx.objectStore(table);
+        const wanted = INDEXES[table] || {};
+        for (const name of [...store.indexNames]) {
+          if (!(name in wanted)) store.deleteIndex(name);
+        }
+        for (const [name, keyPath] of Object.entries(wanted)) {
+          if (!store.indexNames.contains(name)) store.createIndex(name, keyPath);
+        }
+      }
+      void event;
       // seq + autoIncrement gives the outbox guaranteed FIFO ordering, which
       // sync.js relies on: a race_day must reach the server before its races.
       if (!db.objectStoreNames.contains("outbox")) {
