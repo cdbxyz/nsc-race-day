@@ -466,3 +466,81 @@ export function pickerField(label, { value = null, placeholder = "Choose…", ..
     },
   };
 }
+
+/**
+ * The wind pair: direction and strength, both tap-to-select.
+ *
+ * One builder used by the start-sequence page and the results page, so the
+ * two cannot drift into different controls for the same value. Both are
+ * optional, and tapping the selected box again clears it — an OOD who did
+ * not look at the water must be able to leave it blank rather than pick
+ * something plausible, because a guessed force on a results sheet is worse
+ * than an empty one.
+ *
+ * @param {{direction: string|null, force: number|null,
+ *          compass: string[], forces: Array<{force:number,name:string}>,
+ *          onChange: (next:{direction:string|null,force:number|null}) => void}} args
+ */
+export function windControls({ direction, force, compass, forces, onChange }) {
+  let chosenDirection = direction ?? null;
+  let chosenForce = force ?? null;
+
+  const wrap = el("div.windpicker");
+
+  const paint = (grid, isOn) => {
+    for (const button of grid.children) {
+      button.setAttribute("aria-pressed", String(isOn(button)));
+    }
+  };
+
+  const compassGrid = el("div.compass");
+  const forceGrid = el("div.forcegrid");
+
+  const emit = () => {
+    paint(compassGrid, (b) => b.dataset.point === chosenDirection);
+    paint(forceGrid, (b) => Number(b.dataset.force) === chosenForce);
+    onChange({ direction: chosenDirection, force: chosenForce });
+  };
+
+  for (const point of compass) {
+    compassGrid.append(
+      el("button.compassbtn", {
+        type: "button",
+        text: point,
+        dataset: { point },
+        "aria-pressed": String(chosenDirection === point),
+        onclick: () => {
+          // Tapping the chosen one again clears it.
+          chosenDirection = chosenDirection === point ? null : point;
+          emit();
+        },
+      })
+    );
+  }
+
+  for (const { force: n, name } of forces) {
+    forceGrid.append(
+      el("button.forcebtn", {
+        type: "button",
+        dataset: { force: String(n) },
+        "aria-pressed": String(chosenForce === n),
+        "aria-label": `Force ${n}, ${name}`,
+        onclick: () => {
+          chosenForce = chosenForce === n ? null : n;
+          emit();
+        },
+      }, [
+        el("span.forcenum", { text: `F${n}` }),
+        el("span.forcename", { text: name }),
+      ])
+    );
+  }
+
+  wrap.append(
+    el("label.windlabel", { text: "Wind direction (from)" }),
+    compassGrid,
+    el("label.windlabel", { text: "Wind strength" }),
+    forceGrid
+  );
+  return { node: wrap };
+}

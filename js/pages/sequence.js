@@ -9,7 +9,7 @@
  */
 
 import {
-  el, clear, panel, notice, field, selectField, armedButton, onArmChange, readOnlyBanner,
+  el, clear, panel, notice, field, armedButton, onArmChange, readOnlyBanner, windControls,
 } from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
@@ -20,7 +20,7 @@ import {
 import { sequenceSpeed, isFastClock, onSpeedChange } from "./../devclock.js";
 import { wouldBeTestData } from "./../devmode.js";
 import * as device from "./../device.js";
-import { COMPASS, FORCES, windText } from "./../wind.js";
+import { COMPASS, FORCE_CHOICES, windText } from "./../wind.js";
 import { PURSUIT_CALCULATOR_URL } from "./../calendar.js";
 import { keepAwake, allowSleep, sleepWarning } from "./../wakelock.js";
 import { navigate } from "./../router.js";
@@ -188,20 +188,62 @@ function render() {
   clear(host).append(countdownPanel(race, clock, sequence));
 }
 
+/**
+ * What is flying while racing is postponed.
+ *
+ * AP is the one flag with artwork that rendered nowhere, and a postponement
+ * is exactly when an OOD most needs telling what is on the pole — it may be
+ * an hour before the wind fills in, and the answer has to survive the phone
+ * being pocketed, locked and reopened.
+ *
+ * It needs no state of its own: `postponed` is derived from the event log
+ * like everything else, so a phone reopened mid-postponement shows this for
+ * the same reason it showed it before. It clears when the sequence restarts,
+ * which is the moment AP comes down.
+ */
+function apPanel() {
+  return el("div.apstate", {}, [
+    el("img.flagimg.flagimg-light", { src: "img/flags/ap.svg", alt: "AP — answering pennant" }),
+    el("div.apwords", {}, [
+      el("div.aptitle", { text: "AP flying — racing postponed" }),
+      el("p.apnote", {
+        text: "Lower AP and restart the sequence when the fleet is ready. Nothing is lost by waiting.",
+      }),
+    ]),
+  ]);
+}
+
 function armPanel(race, entries, sequence) {
   const body = el("div.panel-body");
 
-  if (sequence.postponed) {
-    body.append(notice("Sequence postponed (AP). Start again when the fleet is ready.", "info"));
-  }
+  if (sequence.postponed) body.append(apPanel());
   if (isFastClock()) body.append(testClockNotice());
   const sleepNote = sleepWarning();
   if (sleepNote) body.append(notice(sleepNote, "info"));
   if (race.is_pursuit) body.append(pursuitNotice());
+  /* Arriving here must not feel like anything has happened. Getting to this
+     page is navigation; the gun is armed by the button at the bottom and by
+     nothing else, and the OOD needs to know which flag to have in hand
+     BEFORE they tap it rather than five seconds after. */
   body.append(
     el("div.regname", { text: `${raceLabel(race)} · ${entries.length} boats signed on` }),
+    /* Only one explanation at a time: while AP is up it has already said why
+       nothing is running, and "nothing has started yet" would be wrong —
+       something started and was postponed. */
+    sequence.postponed ? null : el("div.prestart", {}, [
+      el("img.flagimg.flagimg-light", {
+        src: "img/flags/class.svg",
+        alt: "Class flag",
+      }),
+      el("div.prestart-words", {}, [
+        el("div.prestart-title", { text: "Nothing has started yet" }),
+        el("p.prestart-note", {
+          text: "Have the class flag ready. Tapping Start below begins the ten minutes and records the time — it does not sound anything, so make the signal yourself.",
+        }),
+      ]),
+    ]),
     el("p.stub", {
-      text: "Ten minutes from the tap: class flag at 10, P flag at 5, P down at 1, start at 0. The phone is a visual aid — the horn is the signal.",
+      text: "From the tap: class flag at 10, P flag at 5, P down at 1, start at 0. The phone is a visual aid — the horn is the signal.",
     })
   );
 
@@ -291,50 +333,21 @@ function countdownPanel(race, clock, sequence) {
 
 /** Conditions are captured before the gun, while someone is looking at them. */
 function windPicker(race) {
-  const wrap = el("div.windpicker");
-  let direction = race.wind_direction ?? null;
-  let force = race.wind_force ?? null;
-
   const summary = el("div.windline", { text: windText(race) ?? "Wind not recorded" });
 
-  const compass = el("div.compass");
-  for (const point of COMPASS) {
-    const button = el("button.compassbtn", {
-      type: "button",
-      text: point,
-      "aria-pressed": String(direction === point),
-      onclick: async () => {
-        direction = direction === point ? null : point;
-        for (const b of compass.children) {
-          b.setAttribute("aria-pressed", String(b.textContent === direction));
-        }
-        context.race = await rd.setRaceWind(context.race, { direction, force });
-        summary.textContent = windText(context.race) ?? "Wind not recorded";
-      },
-    });
-    compass.append(button);
-  }
-
-  const forcePick = selectField(
-    "Strength",
-    [{ value: "", label: "— not recorded —" },
-     ...FORCES.map(([n, name]) => ({ value: String(n), label: `F${n} · ${name}` }))],
-    { value: force == null ? "" : String(force) }
-  );
-  forcePick.select.value = force == null ? "" : String(force);
-  forcePick.select.addEventListener("change", async () => {
-    force = forcePick.select.value === "" ? null : Number(forcePick.select.value);
-    context.race = await rd.setRaceWind(context.race, { direction, force });
-    summary.textContent = windText(context.race) ?? "Wind not recorded";
+  const controls = windControls({
+    direction: race.wind_direction ?? null,
+    force: race.wind_force ?? null,
+    compass: COMPASS,
+    forces: FORCE_CHOICES,
+    onChange: async ({ direction, force }) => {
+      context.race = await rd.setRaceWind(context.race, { direction, force });
+      summary.textContent = windText(context.race) ?? "Wind not recorded";
+    },
   });
 
-  wrap.append(
-    el("label.windlabel", { text: "Wind direction (from)" }),
-    compass,
-    forcePick.node,
-    summary
-  );
-  return wrap;
+  controls.node.append(summary);
+  return controls.node;
 }
 
 function pursuitNotice() {

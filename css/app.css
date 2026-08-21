@@ -856,3 +856,65 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;
   font-size:.7rem;color:var(--hull);white-space:nowrap;
 }
+
+/* ---- AP: what is flying while racing is postponed ----
+   Same tile, border and 3:2 shape as the flags in the countdown strip, so it
+   reads as one language — only the colours change, because this sits on a
+   white card rather than the navy panel. */
+.flagimg-light{
+  border-color:var(--line);
+  background:var(--mist);
+}
+.apstate{
+  display:flex;align-items:center;gap:12px;
+  margin:0 0 12px;padding:12px;
+  border:1px solid var(--line);border-left:3px solid var(--flag);
+  border-radius:2px;background:var(--chalk);
+}
+.apstate .flagimg{flex:none;width:96px;max-width:96px}
+.apwords{min-width:0}
+.aptitle{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;
+  font-size:.95rem;font-weight:700;line-height:1.2;color:var(--ink);
+}
+.apnote{margin:4px 0 0;font-size:.8rem;line-height:1.45;color:var(--hull)}
+
+/* ---- the sequence pre-start state ----
+   Arriving on the page is navigation; this says so, and names the flag the
+   OOD should already have in hand. Same tile as the flags in the strip. */
+.prestart{
+  display:flex;align-items:center;gap:12px;
+  margin:12px 0;padding:12px;
+  border:1px solid var(--line);border-left:3px solid var(--hull);
+  border-radius:2px;background:var(--mist);
+}
+.prestart .flagimg{flex:none;width:80px;max-width:80px;background:var(--chalk)}
+.prestart-words{min-width:0}
+.prestart-title{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;
+  font-size:.95rem;font-weight:700;line-height:1.2;color:var(--ink);
+}
+.prestart-note{margin:4px 0 0;font-size:.8rem;line-height:1.45;color:var(--hull)}
+
+/* ---- wind strength: the same language as the compass ----
+   Three columns at 390px leaves ~109px a box — the force large, the Beaufort
+   name small beneath. Nine boxes rather than grouped ranges, because
+   wind_force is a plain integer and a box labelled "F0-1" has no honest
+   integer to store. */
+.forcegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.forcebtn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  min-height:48px;padding:6px 4px;cursor:pointer;
+  border:1px solid var(--line);border-radius:2px;
+  background:var(--chalk);color:var(--ink);
+}
+.forcenum{
+  font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:1rem;line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+.forcename{
+  font-size:.62rem;line-height:1.15;color:var(--hull);text-align:center;
+}
+.forcebtn[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.forcebtn[aria-pressed="true"] .forcename{color:#B9CCEA}
+.windpicker .windlabel{margin-top:4px}

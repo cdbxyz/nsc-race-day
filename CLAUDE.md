@@ -142,8 +142,18 @@ Hard rules:
   never a second copy: `js/markdown.js` renders it at `#/guide`, GUIDE.md is
   precached as shell, and `tests/guide.test.js` fails if the document grows a
   construct the renderer cannot handle. The renderer never touches innerHTML.
+- **Navigation never writes a race event.** Moving forward is not consent to
+  act: arming the gun, ending a race, publishing — each needs its own
+  deliberate tap. Forward buttons are labelled as destinations ("Go to start
+  sequence →"), and where moving on does cause a write, the label says so
+  ("Add a race and sign on →").
 - **Wind is recorded per race on the Beaufort scale** (F0–F8) plus an
-  8-point compass direction it blows FROM. Beaufort because it is what an
+  8-point compass direction it blows FROM. Both are tap-to-select boxes built
+  by `windControls` in ui.js — one builder, so the sequence and results pages
+  cannot drift. Nine force boxes, ungrouped: `wind_force` is a plain integer
+  that prints as "F4", and a box labelled "F0–1" would have no honest integer
+  to store. Both halves are optional and clear by tapping the chosen box
+  again — a guessed force is worse than a blank one. Beaufort because it is what an
   OOD can judge by eye from the beach without an anemometer, and what the
   club's own race reports already use. Captured on the start-sequence page,
   editable on results until publish, and carried into the results sheet,

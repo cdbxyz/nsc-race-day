@@ -8,7 +8,9 @@
  * freezes the race, makes it publicly readable and feeds helm_season_wins.
  */
 
-import { el, clear, panel, notice, field, selectField, actionWithReason } from "./../ui.js";
+import {
+  el, clear, panel, notice, field, selectField, actionWithReason, windControls,
+} from "./../ui.js";
 import * as db from "./../db.js";
 import * as rd from "./../raceday.js";
 import * as log from "./../raceevents.js";
@@ -18,7 +20,7 @@ import {
 } from "./../state.js";
 import { scoreRace, formatPoints, hms, gapText, pyText, placeText, CODE_ORDER } from "./../scoring.js";
 import { savePdf } from "./../pdf.js";
-import { COMPASS, FORCES, windText, windShort } from "./../wind.js";
+import { COMPASS, FORCE_CHOICES, windText, windShort } from "./../wind.js";
 import { SPEEDS } from "./../devclock.js";
 import { navigate } from "./../router.js";
 import { dutyLine } from "./setup.js";
@@ -330,49 +332,21 @@ function windPanel() {
     ]);
   }
 
-  const body = el("div.panel-body.windpicker");
-  let direction = race.wind_direction ?? null;
-  let force = race.wind_force ?? null;
   const summary = el("div.windline", { text: recorded ?? "Not recorded" });
-
-  const compass = el("div.compass");
-  for (const point of COMPASS) {
-    compass.append(
-      el("button.compassbtn", {
-        type: "button",
-        text: point,
-        "aria-pressed": String(direction === point),
-        onclick: async () => {
-          direction = direction === point ? null : point;
-          for (const b of compass.children) {
-            b.setAttribute("aria-pressed", String(b.textContent === direction));
-          }
-          context.race = await rd.setRaceWind(context.race, { direction, force });
-          summary.textContent = windText(context.race) ?? "Not recorded";
-        },
-      })
-    );
-  }
-
-  const forcePick = selectField(
-    "Strength",
-    [{ value: "", label: "— not recorded —" },
-     ...FORCES.map(([n, name]) => ({ value: String(n), label: `F${n} · ${name}` }))],
-    {}
-  );
-  forcePick.select.value = force == null ? "" : String(force);
-  forcePick.select.addEventListener("change", async () => {
-    force = forcePick.select.value === "" ? null : Number(forcePick.select.value);
-    context.race = await rd.setRaceWind(context.race, { direction, force });
-    summary.textContent = windText(context.race) ?? "Not recorded";
+  const controls = windControls({
+    direction: race.wind_direction ?? null,
+    force: race.wind_force ?? null,
+    compass: COMPASS,
+    forces: FORCE_CHOICES,
+    onChange: async ({ direction, force }) => {
+      context.race = await rd.setRaceWind(context.race, { direction, force });
+      summary.textContent = windText(context.race) ?? "Not recorded";
+    },
   });
+  controls.node.append(summary);
 
-  body.append(
-    el("label.windlabel", { text: "Wind direction (from)" }),
-    compass,
-    forcePick.node,
-    summary
-  );
+  const body = el("div.panel-body");
+  body.append(controls.node);
   return panel("Wind", [body]);
 }
 
@@ -625,7 +599,7 @@ function publishPanel() {
         }),
       ]),
       el("div.actions", {}, [
-        el("button.btn.go", { type: "button", text: "Next race →", onclick: () => nextRace() }),
+        nextRaceButton(),
         el("button.btn.ghost", { type: "button", text: "Stand down", onclick: () => navigate("standdown") }),
       ]),
     ]);
@@ -705,11 +679,35 @@ async function doPublish() {
   await reload();
 }
 
-async function nextRace() {
+/**
+ * The forward button after publishing, labelled with what it will actually
+ * do. "Next race" hid the fact that there may be no next race yet and one
+ * would be created by tapping it — a row, a sync, and a race number that
+ * appears on the season's results.
+ */
+function nextRaceButton() {
+  const button = el("button.btn.go", {
+    type: "button",
+    text: "Sign on the next race →",
+    onclick: () => nextRace(),
+  });
+  pendingRace().then((race) => {
+    button.textContent = race
+      ? `Sign on Race ${race.number} →`
+      : "Add a race and sign on →";
+  });
+  return button;
+}
+
+/** The race waiting to be sailed, or null if moving on would create one. */
+async function pendingRace() {
   const races = await rd.racesForDay(context.raceDay.id);
-  const next = races.find((r) => r.status === "setup");
+  return races.find((r) => r.status === "setup") ?? null;
+}
+
+async function nextRace() {
   // The day planned one race and the wind held: add another rather than
-  // sending the OOD back to setup.
-  if (!next) await rd.addRace(context.raceDay);
+  // sending the OOD back to setup. Labelled as such before it is tapped.
+  if (!(await pendingRace())) await rd.addRace(context.raceDay);
   navigate("signon");
 }

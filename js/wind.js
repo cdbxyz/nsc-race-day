@@ -22,6 +22,26 @@ export const FORCES = [
   [8, "Gale"],
 ];
 
+/**
+ * The tap targets, and the short word on each.
+ *
+ * Nine boxes, one per force, NOT grouped into ranges. Grouping would have
+ * fitted six boxes instead of nine, but it would have changed what gets
+ * stored: `wind_force` is a plain integer that prints as "F4" on the sheet,
+ * the PDF and the CSV, and a box labelled "F0–1" has no honest integer to
+ * write. Collapsing the top end is worse still — "F6+" loses the difference
+ * between a windy race and one nobody should have sailed, which is exactly
+ * the distinction a results sheet is read for months later.
+ *
+ * Nine fits: three columns at 390px gives ~109px a box — the force large,
+ * the full Beaufort name small beneath it. Full names rather than clipped
+ * ones because "Light air" and "Light breeze" are adjacent forces, and a box
+ * reading just "Light" beside another reading "Light air" is a coin toss.
+ * The name is what makes this a glance-pick; it is the reason Beaufort beats
+ * knots for an OOD with no anemometer.
+ */
+export const FORCE_CHOICES = FORCES.map(([n, name]) => ({ force: n, name }));
+
 export function forceLabel(force) {
   if (force == null || force === "") return null;
   const found = FORCES.find(([n]) => n === Number(force));

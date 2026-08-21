@@ -81,6 +81,12 @@ export function lastUndoable(events = [], { entryId = null } = {}) {
 export function sequenceState(events = []) {
   const live = liveEvents(events);
 
+  /* Everything after the last postponement, by tap time.
+     Two race signals cannot share a millisecond in practice — they are
+     separate deliberate taps seconds apart — and there is deliberately no
+     tiebreak here, because the honest one does not exist: race_events are
+     keyed on a random UUID, so same-millisecond rows have no defined order
+     to fall back on. Ordering by the recorded time is the truth we have. */
   const lastPostpone = [...live].reverse().find((e) => e.type === "postponed");
   const since = lastPostpone ? ms(lastPostpone.occurred_at) : -Infinity;
   const after = live.filter((e) => (ms(e.occurred_at) ?? 0) > since);

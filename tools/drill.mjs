@@ -129,9 +129,13 @@ await ev(`location.hash="#/sequence"`);
 await waitFor(`!!document.querySelector("#page-sequence .bigstart")`,"arm");
 await ev(`[...document.querySelectorAll("#page-sequence .compassbtn")].find(b=>b.textContent==="SW").click()`);
 await sleep(300);
-await ev(`(()=>{const s=[...document.querySelectorAll("#page-sequence select")].pop();
-  s.value="4"; s.dispatchEvent(new Event("change",{bubbles:true}));})()`);
+await ev(`[...document.querySelectorAll("#page-sequence .forcebtn")]
+  .find(b=>b.textContent.startsWith("F4")).click()`);
 await sleep(400);
+note("windRecordedBeforeGun", await ev(`(async()=>{const rd=await ${M("raceday")};
+  const d=await rd.openRaceDay(); const r=await rd.currentRace(d.id);
+  return {dir:r.wind_direction, force:r.wind_force};})()`));
+note("prestartSaysNothingStarted", await ev(`!!document.querySelector("#page-sequence .prestart")`));
 await ev(`document.querySelector("#page-sequence .bigstart").click()`);
 await waitFor(`location.hash==="#/live"`,"live",80);
 note("sequenceRanOffline", true);

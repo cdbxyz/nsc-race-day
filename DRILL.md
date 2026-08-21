@@ -92,10 +92,16 @@ it was signed on with, without anyone editing a register.
 ### 5. Start sequence and race 1
 
 ```
+windRecordedBeforeGun: { dir: "SW", force: 4 }
+prestartSaysNothingStarted: true
 sequenceRanOffline: true
 dayBrandedTestData: true
 race1Ended: true
 ```
+
+`prestartSaysNothingStarted` is the check that arriving on the sequence page
+has not armed anything. Getting there is navigation; only the Start button
+writes `sequence_started`.
 
 Run on the 60× dev clock so the drill takes minutes rather than an afternoon.
 The day is branded test data automatically, which is what stops a drill from

@@ -66,7 +66,7 @@ async function render() {
           }),
         ]),
         el("div.actions", {}, [
-          el("button.btn.go", { type: "button", text: "Start sequence →", onclick: () => navigate("sequence") }),
+          el("button.btn.go", { type: "button", text: "Go to start sequence →", onclick: () => navigate("sequence") }),
         ]),
       ])
     );
@@ -85,7 +85,9 @@ async function render() {
 
   const proceed = el("button.btn", {
     type: "button",
-    text: complete ? "Start sequence →" : "Proceed anyway →",
+    /* Reads as the destination, not as the act. Tapping this finishes the
+       checklist and moves on; it does not arm anything. */
+    text: complete ? "Done — go to start sequence →" : "Proceed anyway →",
     class: complete ? "" : "warn",
     onclick: async () => {
       await save(run, { completed_at: db.nowIso() });
