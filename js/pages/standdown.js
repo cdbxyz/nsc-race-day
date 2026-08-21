@@ -326,9 +326,11 @@ async function closeDay() {
   }
   await db.localWrite("race_days", { ...raceDay, status: "complete" });
 
-  // One last push before the phone goes in a pocket for a week.
-  await sync.flush();
-  await sync.refreshStatus();
+  /* One last push before the phone goes in a pocket for a week — and settle
+     rather than flush, because the two rows just written above are exactly
+     the ones a single flush can miss. Getting this wrong reported them as
+     stranded every time AND skipped the push that matters most. */
+  await sync.settle();
 
   /* Deliberately NOT reload(): the day is closed, so openRaceDay() finds
      nothing and the page would render "no race day open" — which is both

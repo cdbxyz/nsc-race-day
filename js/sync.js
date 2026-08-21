@@ -65,6 +65,7 @@ export function createSync({
     needsAuth: false,
   };
   let inFlight = false;
+  let inFlightPromise = null;
   let consecutiveFailures = 0;
   let lastDelay = 0;
   let timer = null;
@@ -123,10 +124,28 @@ export function createSync({
 
   /**
    * Push everything currently queued. Safe to call at any time and from
-   * anywhere — concurrent calls collapse into the one already running.
+   * anywhere — concurrent calls collapse into the one already running, AND
+   * WAIT FOR IT.
+   *
+   * That waiting is the whole point. This used to return `status` the instant
+   * it saw another flush in flight, so `await sync.flush()` did not await
+   * anything. Every localWrite triggers a flush, so a caller that wrote a row
+   * and then flushed was always the re-entrant one — which is why closing the
+   * race day reported "2 records are still only on this phone" every single
+   * time and a refresh showed none: the two rows closeDay had just written
+   * were still in the outbox when it counted them, and had gone a moment
+   * later. Worse than the wrong number, the last push before the phone goes
+   * in a pocket for a week was quietly being skipped.
    */
-  async function flush() {
-    if (inFlight) return status;
+  function flush() {
+    if (inFlightPromise) return inFlightPromise;
+    inFlightPromise = runFlush().finally(() => {
+      inFlightPromise = null;
+    });
+    return inFlightPromise;
+  }
+
+  async function runFlush() {
     if (!isOnline()) {
       await refreshStatus();
       return status;
@@ -179,6 +198,27 @@ export function createSync({
     return status;
   }
 
+  /**
+   * Push, and keep pushing until there is genuinely nothing left.
+   *
+   * A single flush can finish before rows written DURING it reach the queue,
+   * so anything that has just written and then wants an honest count — the
+   * end of the race day, above all — needs to settle rather than flush once.
+   *
+   * Bounded, and it gives up the moment trying again would be pointless:
+   * offline, signed out, or a batch that just failed. Those are all states
+   * where rows legitimately remain and the count should say so.
+   */
+  async function settle({ passes = 3 } = {}) {
+    for (let i = 0; i < passes; i += 1) {
+      await flush();
+      if ((await db.countOutbox()) === 0) break;
+      if (!isOnline() || status.needsAuth || consecutiveFailures > 0) break;
+    }
+    await refreshStatus();
+    return status;
+  }
+
   /** Subscribe to status changes. Fires immediately with the current status. */
   function subscribe(fn) {
     listeners.add(fn);
@@ -222,6 +262,7 @@ export function createSync({
   return {
     flush,
     subscribe,
+    settle,
     start,
     stop,
     refreshStatus,

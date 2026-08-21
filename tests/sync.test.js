@@ -7,6 +7,7 @@
 import "fake-indexeddb/auto";
 import test, { beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import * as db from "../js/db.js";
 import { createSync } from "../js/sync.js";
@@ -387,4 +388,116 @@ test("a reference-data pull counts as contact even with an empty outbox", async 
   assert.equal(sync.status.pending, 0);
   assert.equal(sync.status.state, "synced");
   assert.equal(sync.status.lastSyncedAt, at);
+});
+
+/* ---- flush must actually wait ------------------------------------------
+ *
+ * The bug behind "2 records are still only on this phone" at the end of every
+ * race day. Every localWrite triggers a flush, so a caller that writes rows
+ * and then flushes is ALWAYS the re-entrant one — and flush() used to return
+ * `status` the instant it saw another in flight. `await sync.flush()` awaited
+ * nothing, the count that followed was taken with the rows still queued, and
+ * the last push before the phone goes away for a week was skipped.
+ */
+
+test("a concurrent flush is awaited, not skipped", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const pushed = [];
+  const backend = {
+    name: "supabase",
+    push: async (batch) => {
+      await gate;
+      pushed.push(...batch.map((e) => e.id));
+    },
+  };
+  const sync = createSync({ backend, setTimeout: () => 0, clearTimeout: () => {} });
+
+  await db.localWrite("classes", { id: "c1", name: "Solo", base_py: 1142 });
+
+  const first = sync.flush();          // starts, blocks on the gate
+  const second = sync.flush();         // must join the first, not return early
+  assert.equal(second, first, "the same promise, so awaiting it waits");
+
+  release();
+  await second;
+  assert.deepEqual(pushed, ["c1"], "and the work is genuinely done");
+  assert.equal(await db.countOutbox(), 0);
+});
+
+test("settle drains rows written while a flush was already running", async () => {
+  /* Exactly the closeDay shape: write, write, then ask for an honest count. */
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let firstBatch = true;
+  const backend = {
+    name: "supabase",
+    push: async () => {
+      if (firstBatch) { firstBatch = false; await gate; }
+    },
+  };
+  const sync = createSync({ backend, setTimeout: () => 0, clearTimeout: () => {} });
+
+  await db.localWrite("classes", { id: "c1", name: "Solo", base_py: 1142 });
+  const running = sync.flush();
+
+  // Written while that flush is in flight — the rows closeDay adds.
+  await db.localWrite("helms", { id: "h1", name: "Hamish Fowler" });
+  await db.localWrite("race_days", { id: "d1", date: "2026-08-21", status: "complete" });
+
+  release();
+  await running;
+
+  const status = await sync.settle();
+  assert.equal(await db.countOutbox(), 0, "nothing left behind");
+  assert.equal(status.pending, 0, "and the count the OOD is shown says so");
+});
+
+test("closing the day does not report rows it has just pushed", async () => {
+  const backend = { name: "supabase", push: async () => {} };
+  const sync = createSync({ backend, setTimeout: () => 0, clearTimeout: () => {} });
+
+  // What closeDay does: two writes, then settle, then read the count.
+  await db.localWrite("checklist_runs", { id: "r1", race_day_id: "d1", completed_at: "x" });
+  await db.localWrite("race_days", { id: "d1", date: "2026-08-21", status: "complete" });
+
+  const status = await sync.settle();
+  const outstanding = status.pending + (status.blocked || 0);
+  assert.equal(outstanding, 0, "the closing screen must not invent stranded records");
+});
+
+test("settle still tells the truth when the rows really are stranded", async () => {
+  /* The warning has to keep working — this fixes a false positive, not the
+     message. */
+  const backend = {
+    name: "supabase",
+    push: async () => { throw new Error("network unavailable"); },
+  };
+  const sync = createSync({ backend, setTimeout: () => 0, clearTimeout: () => {} });
+
+  await db.localWrite("checklist_runs", { id: "r1", race_day_id: "d1", completed_at: "x" });
+  await db.localWrite("race_days", { id: "d1", date: "2026-08-21", status: "complete" });
+
+  const status = await sync.settle();
+  assert.equal(status.pending, 2, "two rows genuinely waiting, and it says two");
+});
+
+test("settle gives up rather than spinning when retrying is pointless", async () => {
+  let calls = 0;
+  const backend = {
+    name: "supabase",
+    push: async () => { calls += 1; throw new Error("network unavailable"); },
+  };
+  const sync = createSync({ backend, setTimeout: () => 0, clearTimeout: () => {} });
+  await db.localWrite("classes", { id: "c1", name: "Solo", base_py: 1142 });
+
+  await sync.settle();
+  assert.ok(calls <= 2, `a failing push must not be hammered, saw ${calls}`);
+});
+
+test("the closing screen settles rather than flushing once", async () => {
+  const src = await readFile(new URL("../js/pages/standdown.js", import.meta.url), "utf8");
+  const close = src.slice(src.indexOf("async function closeDay"));
+  assert.match(close.slice(0, 900), /await sync\.settle\(\)/);
+  assert.ok(!/await sync\.flush\(\)/.test(close.slice(0, 900)), "one flush is not enough here");
 });
