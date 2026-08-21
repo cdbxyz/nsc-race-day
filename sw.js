@@ -10,7 +10,7 @@
  */
 
 /* BEGIN GENERATED — npm run stamp */
-const VERSION = "8ae1dc9aedc0";
+const VERSION = "3a23f2245a08";
 const SHELL = [
   "./",
   "./GUIDE.md",

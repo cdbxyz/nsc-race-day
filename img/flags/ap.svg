@@ -1,10 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 96" role="img" aria-label="AP flag placeholder">
-  <title>AP — placeholder</title>
-  <!-- PLACEHOLDER. Replace with the real flag artwork, same path.
-       144x96 viewBox (3:2), displayed in a 96x64 box. -->
-  <rect x="2" y="2" width="140" height="92" fill="#0E7A4A" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="7 5"/>
-  <text x="72" y="52" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
-        font-size="26" font-weight="bold" fill="#FFFFFF">AP</text>
-  <text x="72" y="74" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
-        font-size="11" fill="#FFFFFF" opacity="0.8">placeholder</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 96" role="img"
+     aria-label="Answering pennant — red and white vertical stripes, tapered">
+  <title>AP — Answering Pennant</title>
+  <!-- ICS Answering Pennant: five vertical stripes, red at both edges, on a
+       TAPERED pennant. The taper is not decoration — the shape is half of how
+       this is recognised at distance, and it is what tells it apart from a
+       rectangular signal flag.
+
+       Red is Pantone 186, the code-flag red. The dark hem is there because
+       two of the five stripes are white and this flag is also drawn on a pale
+       tile on the postponement panel, where white-on-white would simply
+       vanish. It is an outline, not a colour change. -->
+  <defs>
+    <clipPath id="ap-shape">
+      <path d="M5 5 L139 37 L139 59 L5 91 Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#ap-shape)">
+    <rect x="5"     y="5" width="26.8" height="86" fill="#C8102E"/>
+    <rect x="31.8"  y="5" width="26.8" height="86" fill="#FFFFFF"/>
+    <rect x="58.6"  y="5" width="26.8" height="86" fill="#C8102E"/>
+    <rect x="85.4"  y="5" width="26.8" height="86" fill="#FFFFFF"/>
+    <rect x="112.2" y="5" width="26.8" height="86" fill="#C8102E"/>
+  </g>
+  <path d="M5 5 L139 37 L139 59 L5 91 Z" fill="none"
+        stroke="#3A3A3A" stroke-width="1.6" stroke-linejoin="round"/>
 </svg>

@@ -1,10 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 96" role="img" aria-label="P flag placeholder">
-  <title>P — placeholder</title>
-  <!-- PLACEHOLDER. Replace with the real flag artwork, same path.
-       144x96 viewBox (3:2), displayed in a 96x64 box. -->
-  <rect x="2" y="2" width="140" height="92" fill="#C8102E" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="7 5"/>
-  <text x="72" y="52" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
-        font-size="26" font-weight="bold" fill="#FFFFFF">P</text>
-  <text x="72" y="74" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
-        font-size="11" fill="#FFFFFF" opacity="0.8">placeholder</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 96" role="img"
+     aria-label="Preparatory flag P — blue with a white rectangle">
+  <title>P — Preparatory</title>
+  <!-- ICS Preparatory ("Blue Peter"): blue field, white rectangle centred.
+       Blue is Pantone 286, the International Code of Signals blue, rather
+       than the app's navy — an OOD is matching this against real bunting.
+       Artwork sits 5 units inside the 144x96 box (~3.5%) so nothing touches
+       the tile border it is drawn on. -->
+  <rect x="5" y="5" width="134" height="86" fill="#0033A0"
+        stroke="#00246E" stroke-width="1.5"/>
+  <rect x="40" y="27" width="64" height="42" fill="#FFFFFF"/>
 </svg>
