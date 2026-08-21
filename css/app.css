@@ -666,8 +666,11 @@ button.btn.warn{background:var(--flag);border-color:var(--flag)}
 }
 .mast-home:focus-visible{outline:2px solid #9FC0F0;outline-offset:3px}
 .mastlogo{
-  flex:none;width:40px;height:40px;border-radius:2px;
-  object-fit:contain;background:rgba(255,255,255,.08);
+  /* No tile behind it. The translucent panel and rounded corner existed to
+     give the placeholder a visible box; against the real burgee they read as
+     a box drawn around the club's mark, and the radius would clip the
+     flagpole and the pennant tip, which run edge to edge in the artwork. */
+  flex:none;width:40px;height:40px;object-fit:contain;
 }
 
 /* ---- start sequence flag imagery ----

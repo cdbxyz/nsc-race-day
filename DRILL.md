@@ -66,7 +66,7 @@ anything listed there is a file that will not be available offline.
 appRenderedOffline: true
 fontsLoaded: true
 mastLogo: { file: "nsc-logo.png", status: 200, precached: true,
-            natural: [120,120], rendered: [40,40], inkOnMast: 1.09 }
+            natural: [120,120], rendered: [40,40], inkOnMast: 16.98 }
 ```
 
 The app opens completely from cache. The logo is checked here because `img/`
@@ -85,14 +85,15 @@ Read every field; each one catches a different miss:
 | `rendered` | The box it occupies. `[0,0]` means it loaded and is not visible. |
 | `inkOnMast` | Contrast of the artwork's mean ink against the navy mast. |
 
-> `inkOnMast: 1.09` in the example is a **finding, not a pass**: the club
-> burgee is black line art and the mast is navy, so it loads perfectly and
-> cannot be seen. A light version of the same file fixes it with no code
-> change.
+> `inkOnMast: 16.98` is white artwork on the navy mast — the highest ratio
+> there is, and well past the 10.9 this app holds anything read at a glance
+> to. Anything approaching 4.5 means the logo loads perfectly and cannot be
+> seen; the burgee read **1.09** while it was still black line art, and that
+> number is what caught it.
 >
-> The old check was `complete && naturalWidth > 0`, which is true for *any*
-> image that loads — including the placeholder it was meant to have replaced.
-> That is how a logo miss got past this drill twice.
+> The check before this one was `complete && naturalWidth > 0`, which is true
+> for *any* image that loads — including the placeholder it was meant to have
+> replaced. That is how a logo miss got past this drill twice.
 
 ### 3–4. Set up a day and sign boats on, offline
 
